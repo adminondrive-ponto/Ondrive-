@@ -1,142 +1,55 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-type Row = Record<string, any>;
+type Vehicle = {
+  id: string;
+  plate?: string | null;
+  model?: string | null;
+  brand?: string | null;
+  status?: string | null;
+};
 
-async function getCount(table: string) {
+type Driver = {
+  id: string;
+  name?: string | null;
+};
+
+type Investor = {
+  id: string;
+  name?: string | null;
+};
+
+async function getDashboardData() {
   const supabase = await createSupabaseServerClient();
 
-  const { count } = await supabase
-    .from(table)
-    .select('*', { count: 'exact', head: true });
+  const [vehiclesRes, driversRes, investorsRes] = await Promise.all([
+    supabase.from('vehicles').select('id, plate, model, brand, status'),
+    supabase.from('drivers').select('id, name'),
+    supabase.from('investors').select('id, name'),
+  ]);
 
-  return count ?? 0;
-}
+  const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
+  const drivers = (driversRes.data ?? []) as Driver[];
+  const investors = (investorsRes.data ?? []) as Investor[];
 
-async function getVehicleStatusCount(status: string) {
-  const supabase = await createSupabaseServerClient();
-
-  const { count } = await supabase
-    .from('vehicles')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', status);
-
-  return count ?? 0;
-}
-
-async function getVehicleByStatus(status: string) {
-  const supabase = await createSupabaseServerClient();
-
-  const { data } = await supabase
-    .from('vehicles')
-    .select('*')
-    .eq('status', status)
-    .order('created_at', { ascending: false });
-
-  return data ?? [];
-}
-
-async function getRows(table: string) {
-  const supabase = await createSupabaseServerClient();
-
-  const { data } = await supabase
-    .from(table)
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  return data ?? [];
-}
-
-function getValue(row: Row, keys: string[]) {
-  for (const key of keys) {
-    if (row?.[key]) return row[key];
-  }
-
-  return '-';
-}
-
-function SimpleTable({
-  title,
-  rows,
-  columns,
-  emptyText,
-}: {
-  title: string;
-  rows: Row[];
-  columns: { label: string; keys: string[] }[];
-  emptyText: string;
-}) {
-  return (
-    <div className="card" style={{ marginTop: 16, overflowX: 'auto' }}>
-      <h3 style={{ marginTop: 0 }}>{title}</h3>
-
-      {rows.length === 0 ? (
-        <p style={{ margin: 0, color: '#666' }}>{emptyText}</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.label}
-                  style={{
-                    textAlign: 'left',
-                    padding: '10px',
-                    borderBottom: '1px solid #ddd',
-                  }}
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.id ?? index}>
-                {columns.map((column) => (
-                  <td
-                    key={column.label}
-                    style={{
-                      padding: '10px',
-                      borderBottom: '1px solid #eee',
-                    }}
-                  >
-                    {getValue(row, column.keys)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
+  return { vehicles, drivers, investors };
 }
 
 export async function DashboardOverview() {
-  const [
-    totalVeiculos,
-    veiculosAlugados,
-    veiculosDisponiveis,
-    veiculosManutencao,
-    totalMotoristas,
-    totalSocios,
-    listaVeiculosAlugados,
-    listaVeiculosDisponiveis,
-    listaMotoristas,
-    listaSocios,
-  ] = await Promise.all([
-    getCount('vehicles'),
-    getVehicleStatusCount('rented'),
-    getVehicleStatusCount('available'),
-    getVehicleStatusCount('maintenance'),
-    getCount('drivers'),
-    getCount('investors'),
-    getVehicleByStatus('rented'),
-    getVehicleByStatus('available'),
-    getRows('drivers'),
-    getRows('investors'),
-  ]);
+  const { vehicles, drivers, investors } = await getDashboardData();
+
+  const veiculosAlugados = vehicles.filter((v) => v.status === 'rented');
+  const veiculosDisponiveis = vehicles.filter((v) => v.status === 'available');
+  const veiculosManutencao = vehicles.filter((v) => v.status === 'maintenance');
+
+  const totalVeiculos = vehicles.length;
+  const totalMotoristas = drivers.length;
+  const totalSocios = investors.length;
+
+  function vehicleLabel(vehicle: Vehicle) {
+    return [vehicle.brand, vehicle.model, vehicle.plate]
+      .filter(Boolean)
+      .join(' - ') || 'Veículo sem identificação';
+  }
 
   return (
     <section className="card">
@@ -150,17 +63,17 @@ export async function DashboardOverview() {
 
         <div className="card kpi-card">
           <h3>Veículos alugados</h3>
-          <strong>{veiculosAlugados}</strong>
+          <strong>{veiculosAlugados.length}</strong>
         </div>
 
         <div className="card kpi-card">
           <h3>Veículos disponíveis</h3>
-          <strong>{veiculosDisponiveis}</strong>
+          <strong>{veiculosDisponiveis.length}</strong>
         </div>
 
         <div className="card kpi-card">
           <h3>Veículos em manutenção</h3>
-          <strong>{veiculosManutencao}</strong>
+          <strong>{veiculosManutencao.length}</strong>
         </div>
 
         <div className="card kpi-card">
@@ -174,51 +87,66 @@ export async function DashboardOverview() {
         </div>
       </div>
 
-      <SimpleTable
-        title="Veículos alugados"
-        rows={listaVeiculosAlugados}
-        emptyText="Nenhum veículo alugado encontrado."
-        columns={[
-          { label: 'Placa', keys: ['plate', 'placa'] },
-          { label: 'Veículo', keys: ['model', 'modelo', 'name', 'nome'] },
-          { label: 'Marca', keys: ['brand', 'marca'] },
-          { label: 'Status', keys: ['status'] },
-        ]}
-      />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 16,
+          marginTop: 24,
+        }}
+      >
+        <div className="card">
+          <h3>Carros alugados</h3>
+          {veiculosAlugados.length === 0 ? (
+            <p>Nenhum carro alugado.</p>
+          ) : (
+            <ul>
+              {veiculosAlugados.map((vehicle) => (
+                <li key={vehicle.id}>{vehicleLabel(vehicle)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <SimpleTable
-        title="Veículos disponíveis"
-        rows={listaVeiculosDisponiveis}
-        emptyText="Nenhum veículo disponível encontrado."
-        columns={[
-          { label: 'Placa', keys: ['plate', 'placa'] },
-          { label: 'Veículo', keys: ['model', 'modelo', 'name', 'nome'] },
-          { label: 'Marca', keys: ['brand', 'marca'] },
-          { label: 'Status', keys: ['status'] },
-        ]}
-      />
+        <div className="card">
+          <h3>Carros disponíveis</h3>
+          {veiculosDisponiveis.length === 0 ? (
+            <p>Nenhum carro disponível.</p>
+          ) : (
+            <ul>
+              {veiculosDisponiveis.map((vehicle) => (
+                <li key={vehicle.id}>{vehicleLabel(vehicle)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <SimpleTable
-        title="Sócios"
-        rows={listaSocios}
-        emptyText="Nenhum sócio encontrado."
-        columns={[
-          { label: 'Nome', keys: ['name', 'nome', 'full_name'] },
-          { label: 'Telefone', keys: ['phone', 'telefone'] },
-          { label: 'E-mail', keys: ['email'] },
-        ]}
-      />
+        <div className="card">
+          <h3>Sócios</h3>
+          {investors.length === 0 ? (
+            <p>Nenhum sócio cadastrado.</p>
+          ) : (
+            <ul>
+              {investors.map((investor) => (
+                <li key={investor.id}>{investor.name || 'Sócio sem nome'}</li>
+              ))}
+            </ul>
+          )}
+        </div>
 
-      <SimpleTable
-        title="Motoristas"
-        rows={listaMotoristas}
-        emptyText="Nenhum motorista encontrado."
-        columns={[
-          { label: 'Nome', keys: ['name', 'nome', 'full_name'] },
-          { label: 'Telefone', keys: ['phone', 'telefone'] },
-          { label: 'CNH', keys: ['license_number', 'cnh'] },
-        ]}
-      />
+        <div className="card">
+          <h3>Motoristas</h3>
+          {drivers.length === 0 ? (
+            <p>Nenhum motorista cadastrado.</p>
+          ) : (
+            <ul>
+              {drivers.map((driver) => (
+                <li key={driver.id}>{driver.name || 'Motorista sem nome'}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
