@@ -1,0 +1,16 @@
+ARQUIVOS QUE DEVEM APARECER NA RAIZ DO PROJETO:
+
+ARQUIVOS_DA_RAIZ.txt
+README_PTBR.md
+app
+components
+lib
+middleware.ts
+next-env.d.ts
+next.config.ts
+package.json
+public
+supabase
+tsconfig.json
+types
+vercel.json
