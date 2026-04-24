@@ -27,11 +27,19 @@ async function getDashboardData() {
     supabase.from('investors').select('id, name'),
   ]);
 
-  const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
-  const drivers = (driversRes.data ?? []) as Driver[];
-  const investors = (investorsRes.data ?? []) as Investor[];
+  return {
+    vehicles: (vehiclesRes.data ?? []) as Vehicle[],
+    drivers: (driversRes.data ?? []) as Driver[],
+    investors: (investorsRes.data ?? []) as Investor[],
+  };
+}
 
-  return { vehicles, drivers, investors };
+function traduzStatus(status?: string | null) {
+  if (status === 'rented') return 'Alugado';
+  if (status === 'available') return 'Disponível';
+  if (status === 'maintenance') return 'Manutenção';
+  if (status === 'sold') return 'Vendido';
+  return 'Não informado';
 }
 
 export async function DashboardOverview() {
@@ -41,16 +49,6 @@ export async function DashboardOverview() {
   const veiculosDisponiveis = vehicles.filter((v) => v.status === 'available');
   const veiculosManutencao = vehicles.filter((v) => v.status === 'maintenance');
 
-  const totalVeiculos = vehicles.length;
-  const totalMotoristas = drivers.length;
-  const totalSocios = investors.length;
-
-  function vehicleLabel(vehicle: Vehicle) {
-    return [vehicle.brand, vehicle.model, vehicle.plate]
-      .filter(Boolean)
-      .join(' - ') || 'Veículo sem identificação';
-  }
-
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Painel operacional</h2>
@@ -58,7 +56,7 @@ export async function DashboardOverview() {
       <div className="kpi-grid">
         <div className="card kpi-card">
           <h3>Total de veículos</h3>
-          <strong>{totalVeiculos}</strong>
+          <strong>{vehicles.length}</strong>
         </div>
 
         <div className="card kpi-card">
@@ -78,73 +76,100 @@ export async function DashboardOverview() {
 
         <div className="card kpi-card">
           <h3>Motoristas</h3>
-          <strong>{totalMotoristas}</strong>
+          <strong>{drivers.length}</strong>
         </div>
 
         <div className="card kpi-card">
           <h3>Sócios</h3>
-          <strong>{totalSocios}</strong>
+          <strong>{investors.length}</strong>
         </div>
       </div>
 
       <div
         style={{
+          marginTop: 28,
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 16,
-          marginTop: 24,
+          gridTemplateColumns: '1fr 1fr',
+          gap: 20,
+          alignItems: 'start',
         }}
       >
-        <div className="card">
-          <h3>Carros alugados</h3>
-          {veiculosAlugados.length === 0 ? (
-            <p>Nenhum carro alugado.</p>
-          ) : (
-            <ul>
-              {veiculosAlugados.map((vehicle) => (
-                <li key={vehicle.id}>{vehicleLabel(vehicle)}</li>
-              ))}
-            </ul>
-          )}
+        <div>
+          <h3>Veículos</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: 10 }}>Marca</th>
+                <th style={{ textAlign: 'left', padding: 10 }}>Modelo</th>
+                <th style={{ textAlign: 'left', padding: 10 }}>Placa</th>
+                <th style={{ textAlign: 'left', padding: 10 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ padding: 10 }}>
+                    Nenhum veículo cadastrado.
+                  </td>
+                </tr>
+              ) : (
+                vehicles.map((vehicle) => (
+                  <tr key={vehicle.id}>
+                    <td style={{ padding: 10 }}>{vehicle.brand || '-'}</td>
+                    <td style={{ padding: 10 }}>{vehicle.model || '-'}</td>
+                    <td style={{ padding: 10 }}>{vehicle.plate || '-'}</td>
+                    <td style={{ padding: 10 }}>{traduzStatus(vehicle.status)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
-        <div className="card">
-          <h3>Carros disponíveis</h3>
-          {veiculosDisponiveis.length === 0 ? (
-            <p>Nenhum carro disponível.</p>
-          ) : (
-            <ul>
-              {veiculosDisponiveis.map((vehicle) => (
-                <li key={vehicle.id}>{vehicleLabel(vehicle)}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="card">
-          <h3>Sócios</h3>
-          {investors.length === 0 ? (
-            <p>Nenhum sócio cadastrado.</p>
-          ) : (
-            <ul>
-              {investors.map((investor) => (
-                <li key={investor.id}>{investor.name || 'Sócio sem nome'}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="card">
+        <div>
           <h3>Motoristas</h3>
-          {drivers.length === 0 ? (
-            <p>Nenhum motorista cadastrado.</p>
-          ) : (
-            <ul>
-              {drivers.map((driver) => (
-                <li key={driver.id}>{driver.name || 'Motorista sem nome'}</li>
-              ))}
-            </ul>
-          )}
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: 10 }}>Nome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drivers.length === 0 ? (
+                <tr>
+                  <td style={{ padding: 10 }}>Nenhum motorista cadastrado.</td>
+                </tr>
+              ) : (
+                drivers.map((driver) => (
+                  <tr key={driver.id}>
+                    <td style={{ padding: 10 }}>{driver.name || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          <h3 style={{ marginTop: 28 }}>Sócios</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: 10 }}>Nome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {investors.length === 0 ? (
+                <tr>
+                  <td style={{ padding: 10 }}>Nenhum sócio cadastrado.</td>
+                </tr>
+              ) : (
+                investors.map((investor) => (
+                  <tr key={investor.id}>
+                    <td style={{ padding: 10 }}>{investor.name || '-'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
