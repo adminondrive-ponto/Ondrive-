@@ -29,16 +29,16 @@ type AlertTemplate = {
 };
 
 const alertTypes: Record<AlertType, { title: string; color: string; bg: string }> = {
-  cnh_vencendo: { title: 'CNH vencendo', color: '#1d4ed8', bg: '#dbeafe' },
-  cnh_vencida: { title: 'CNH vencida', color: '#b91c1c', bg: '#fee2e2' },
-  multa_vencendo: { title: 'Multa vencendo', color: '#b45309', bg: '#fef3c7' },
-  multa_vencida: { title: 'Multa vencida', color: '#b91c1c', bg: '#fee2e2' },
-  aluguel_vencendo: { title: 'Aluguel vencendo', color: '#7c3aed', bg: '#ede9fe' },
-  aluguel_vencido_rescindido: { title: 'Aluguel vencido + rescisão', color: '#b91c1c', bg: '#fee2e2' },
-  venda_vencendo: { title: 'Venda vencendo', color: '#047857', bg: '#d1fae5' },
-  venda_vencida_rescindido: { title: 'Venda vencida + rescisão', color: '#b91c1c', bg: '#fee2e2' },
-  revisao: { title: 'Revisão obrigatória', color: '#0f766e', bg: '#ccfbf1' },
-  contrato_rescindido: { title: 'Contrato rescindido', color: '#991b1b', bg: '#fee2e2' },
+  cnh_vencendo: { title: 'CNH vencendo', color: '#1d4ed8', bg: '#eff6ff' },
+  cnh_vencida: { title: 'CNH vencida', color: '#b91c1c', bg: '#fef2f2' },
+  multa_vencendo: { title: 'Multa vencendo', color: '#b45309', bg: '#fffbeb' },
+  multa_vencida: { title: 'Multa vencida', color: '#b91c1c', bg: '#fef2f2' },
+  aluguel_vencendo: { title: 'Aluguel vencendo', color: '#7c3aed', bg: '#f5f3ff' },
+  aluguel_vencido_rescindido: { title: 'Aluguel vencido + rescisão', color: '#b91c1c', bg: '#fef2f2' },
+  venda_vencendo: { title: 'Venda vencendo', color: '#047857', bg: '#ecfdf5' },
+  venda_vencida_rescindido: { title: 'Venda vencida + rescisão', color: '#b91c1c', bg: '#fef2f2' },
+  revisao: { title: 'Revisão obrigatória', color: '#0f766e', bg: '#f0fdfa' },
+  contrato_rescindido: { title: 'Contrato rescindido', color: '#991b1b', bg: '#fef2f2' },
 };
 
 const defaultTemplates: AlertTemplate[] = [
@@ -104,10 +104,6 @@ const defaultTemplates: AlertTemplate[] = [
   },
 ];
 
-function onlyNumbers(value?: string | null) {
-  return String(value ?? '').replace(/\D/g, '');
-}
-
 export function AlertsCenter() {
   const supabase = getSupabaseBrowserClient() as any;
 
@@ -134,7 +130,10 @@ export function AlertsCenter() {
 
   useEffect(() => {
     const saved = localStorage.getItem('ondrive_alert_templates');
-    if (saved) setTemplates(JSON.parse(saved));
+
+    if (saved) {
+      setTemplates(JSON.parse(saved));
+    }
   }, []);
 
   useEffect(() => {
@@ -165,7 +164,9 @@ export function AlertsCenter() {
 
     setTemplates((old) =>
       old.map((item) =>
-        item.id === selectedTemplateId ? { ...item, message: customMessage } : item,
+        item.id === selectedTemplateId
+          ? { ...item, message: customMessage }
+          : item,
       ),
     );
 
@@ -180,8 +181,8 @@ export function AlertsCenter() {
       {
         id: crypto.randomUUID(),
         type: alertType,
-        title: newTitle,
-        message: newMessage,
+        title: newTitle.trim(),
+        message: newMessage.trim(),
       },
     ]);
 
@@ -195,20 +196,18 @@ export function AlertsCenter() {
     setStatus('Mensagem copiada.');
   }
 
-  const phone = onlyNumbers(selectedDriver?.phone);
-  const whatsappUrl = phone
-    ? `https://wa.me/55${phone.replace(/^55/, '')}?text=${encodeURIComponent(finalMessage)}`
-    : '#';
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <section className="card" style={{ padding: 28 }}>
-        <h2 style={{ marginTop: 0, fontSize: 28 }}>Central de Alertas</h2>
-        <p style={{ color: '#64748b', marginTop: -8 }}>
-          Escolha o tipo de alerta, selecione uma mensagem pronta, edite se precisar e envie ao motorista.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <section className="card" style={{ padding: 24 }}>
+        <h2 style={{ marginTop: 0, marginBottom: 6, fontSize: 22, fontWeight: 700 }}>
+          Central de Alertas
+        </h2>
+
+        <p style={{ color: '#64748b', fontSize: 14, marginTop: 0 }}>
+          Selecione o tipo de alerta, escolha uma mensagem pronta, edite se precisar e copie o texto.
         </p>
 
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 22 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           {Object.entries(alertTypes).map(([key, item]) => (
             <button
               key={key}
@@ -217,16 +216,17 @@ export function AlertsCenter() {
                 setAlertType(key as AlertType);
                 setSelectedTemplateId('');
                 setCustomMessage('');
+                setStatus('');
               }}
               style={{
-                border: '1px solid #dbe3ef',
+                border: alertType === key ? `1px solid ${item.color}` : '1px solid #dbe3ef',
                 background: alertType === key ? item.bg : '#fff',
-                color: item.color,
-                padding: '12px 16px',
-                borderRadius: 14,
-                fontWeight: 700,
+                color: alertType === key ? item.color : '#334155',
+                padding: '9px 13px',
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: alertType === key ? '0 10px 24px rgba(15,23,42,.10)' : 'none',
               }}
             >
               {item.title}
@@ -238,15 +238,17 @@ export function AlertsCenter() {
       <section
         style={{
           display: 'grid',
-          gridTemplateColumns: '1.1fr .9fr',
-          gap: 22,
+          gridTemplateColumns: '1.15fr .85fr',
+          gap: 18,
           alignItems: 'start',
         }}
       >
-        <div className="card" style={{ padding: 28 }}>
-          <h3 style={{ marginTop: 0, fontSize: 22 }}>Mensagens prontas</h3>
+        <div className="card" style={{ padding: 24 }}>
+          <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
+            Mensagens prontas
+          </h3>
 
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {filteredTemplates.map((template) => (
               <button
                 key={template.id}
@@ -254,30 +256,44 @@ export function AlertsCenter() {
                 onClick={() => selectTemplate(template)}
                 style={{
                   textAlign: 'left',
-                  border: selectedTemplateId === template.id ? '2px solid #2563eb' : '1px solid #dbe3ef',
+                  border: selectedTemplateId === template.id ? '1px solid #2563eb' : '1px solid #e2e8f0',
                   background: selectedTemplateId === template.id ? '#eff6ff' : '#fff',
-                  borderRadius: 16,
-                  padding: 18,
+                  borderRadius: 14,
+                  padding: 14,
                   cursor: 'pointer',
                 }}
               >
-                <strong>{template.title}</strong>
-                <p style={{ marginBottom: 0, color: '#475569' }}>{template.message}</p>
+                <strong style={{ display: 'block', fontSize: 14, marginBottom: 6 }}>
+                  {template.title}
+                </strong>
+                <span style={{ color: '#475569', fontSize: 13, lineHeight: 1.45 }}>
+                  {template.message}
+                </span>
               </button>
             ))}
           </div>
 
-          <div style={{ marginTop: 26, borderTop: '1px solid #e5e7eb', paddingTop: 22 }}>
-            <h3>Criar nova mensagem</h3>
+          <div style={{ marginTop: 22, borderTop: '1px solid #e5e7eb', paddingTop: 18 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Criar nova mensagem</h3>
 
             <div className="field">
               <label>Título</label>
-              <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Ex: Aviso amigável de pagamento"
+                style={{ fontSize: 14 }}
+              />
             </div>
 
             <div className="field">
               <label>Mensagem</label>
-              <textarea value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Digite a nova mensagem pronta..."
+                style={{ fontSize: 14, lineHeight: 1.5, minHeight: 90 }}
+              />
             </div>
 
             <button className="btn primary" type="button" onClick={createTemplate}>
@@ -286,12 +302,18 @@ export function AlertsCenter() {
           </div>
         </div>
 
-        <div className="card" style={{ padding: 28 }}>
-          <h3 style={{ marginTop: 0, fontSize: 22 }}>Preparar envio</h3>
+        <div className="card" style={{ padding: 24 }}>
+          <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
+            Preparar envio
+          </h3>
 
           <div className="field">
             <label>Motorista</label>
-            <select value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+            <select
+              value={driverId}
+              onChange={(e) => setDriverId(e.target.value)}
+              style={{ fontSize: 14 }}
+            >
               <option value="">Selecione</option>
               {drivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>
@@ -306,52 +328,66 @@ export function AlertsCenter() {
               style={{
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: 14,
-                padding: 14,
-                marginTop: 12,
+                borderRadius: 12,
+                padding: 12,
+                marginTop: 10,
+                fontSize: 14,
               }}
             >
               <strong>Telefone:</strong> {selectedDriver.phone || 'Não cadastrado'}
             </div>
           ) : null}
 
-          <div className="field" style={{ marginTop: 16 }}>
+          <div className="field" style={{ marginTop: 14 }}>
             <label>Mensagem final</label>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               placeholder="Clique em uma mensagem pronta ou escreva uma nova..."
-              style={{ minHeight: 180 }}
+              style={{ fontSize: 14, lineHeight: 1.5, minHeight: 150 }}
             />
           </div>
 
           <div
             style={{
-              background: alertTypes[alertType].bg,
-              color: alertTypes[alertType].color,
-              borderRadius: 16,
-              padding: 16,
+              background: '#f8fafc',
+              color: '#0f172a',
+              border: '1px solid #e2e8f0',
+              borderRadius: 14,
+              padding: 14,
               marginTop: 12,
-              fontWeight: 600,
+              fontSize: 13,
+              lineHeight: 1.5,
             }}
           >
-            Prévia: {finalMessage || 'Nenhuma mensagem selecionada.'}
+            <strong>Prévia:</strong>{' '}
+            {finalMessage || 'Nenhuma mensagem selecionada.'}
           </div>
 
-          {status ? <div className="alert success" style={{ marginTop: 12 }}>{status}</div> : null}
+          {status ? (
+            <div className="alert success" style={{ marginTop: 12, fontSize: 13 }}>
+              {status}
+            </div>
+          ) : null}
 
-          <div className="btn-row" style={{ marginTop: 16 }}>
-            <button className="btn" type="button" onClick={saveEditedTemplate} disabled={!selectedTemplateId}>
+          <div className="btn-row" style={{ marginTop: 14 }}>
+            <button
+              className="btn"
+              type="button"
+              onClick={saveEditedTemplate}
+              disabled={!selectedTemplateId}
+            >
               Salvar edição
             </button>
 
-            <button className="btn primary" type="button" onClick={() => void copyText()} disabled={!customMessage}>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => void copyText()}
+              disabled={!customMessage}
+            >
               Copiar
             </button>
-
-            <a className="btn" href={whatsappUrl} target="_blank" rel="noreferrer">
-              Abrir WhatsApp
-            </a>
           </div>
         </div>
       </section>
