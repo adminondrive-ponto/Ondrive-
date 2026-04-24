@@ -28,6 +28,15 @@ type AlertTemplate = {
   message: string;
 };
 
+type AutoAlert = {
+  id: string;
+  type: string;
+  title: string;
+  date: string;
+  days: number;
+  status: 'vencido' | 'vence_hoje' | 'a_vencer';
+};
+
 const alertTypes: Record<AlertType, { title: string; color: string; bg: string }> = {
   cnh_vencendo: { title: 'CNH vencendo', color: '#1d4ed8', bg: '#eff6ff' },
   cnh_vencida: { title: 'CNH vencida', color: '#b91c1c', bg: '#fef2f2' },
@@ -46,63 +55,102 @@ const defaultTemplates: AlertTemplate[] = [
     id: '1',
     type: 'cnh_vencendo',
     title: 'Aviso de CNH vencendo',
-    message: 'Sua CNH está próxima do vencimento. Por favor, envie a atualização para evitarmos bloqueios operacionais.',
+    message:
+      'Sua CNH está próxima do vencimento. Por favor, envie a atualização para evitarmos bloqueios operacionais.',
   },
   {
     id: '2',
     type: 'cnh_vencida',
     title: 'CNH vencida',
-    message: 'Sua CNH consta como vencida. É necessário regularizar imediatamente para continuar com a operação.',
+    message:
+      'Sua CNH consta como vencida. É necessário regularizar imediatamente para continuar com a operação.',
   },
   {
     id: '3',
     type: 'multa_vencendo',
     title: 'Multa próxima do vencimento',
-    message: 'Existe uma multa próxima do vencimento. Regularize dentro do prazo para evitar juros e restrições.',
+    message:
+      'Existe uma multa próxima do vencimento. Regularize dentro do prazo para evitar juros e restrições.',
   },
   {
     id: '4',
     type: 'multa_vencida',
     title: 'Multa vencida',
-    message: 'Existe uma multa vencida vinculada ao seu cadastro/veículo. Regularize imediatamente para evitar novas medidas.',
+    message:
+      'Existe uma multa vencida vinculada ao seu cadastro/veículo. Regularize imediatamente para evitar novas medidas.',
   },
   {
     id: '5',
     type: 'aluguel_vencendo',
     title: 'Aluguel vencendo',
-    message: 'Seu aluguel está próximo do vencimento. Pedimos que se organize para manter o pagamento em dia.',
+    message:
+      'Seu aluguel está próximo do vencimento. Pedimos que se organize para manter o pagamento em dia.',
   },
   {
     id: '6',
     type: 'aluguel_vencido_rescindido',
     title: 'Aluguel vencido e contrato rescindido',
-    message: 'Seu aluguel está vencido. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
+    message:
+      'Seu aluguel está vencido. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
   },
   {
     id: '7',
     type: 'venda_vencendo',
     title: 'Venda vencendo',
-    message: 'Sua parcela da venda está próxima do vencimento. Pedimos atenção ao prazo de pagamento.',
+    message:
+      'Sua parcela da venda está próxima do vencimento. Pedimos atenção ao prazo de pagamento.',
   },
   {
     id: '8',
     type: 'venda_vencida_rescindido',
     title: 'Venda vencida e contrato rescindido',
-    message: 'Sua parcela da venda está vencida. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
+    message:
+      'Sua parcela da venda está vencida. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
   },
   {
     id: '9',
     type: 'revisao',
     title: 'Revisão obrigatória',
-    message: 'Seu veículo precisa passar por revisão obrigatória. Agende o quanto antes para evitar bloqueio operacional.',
+    message:
+      'Seu veículo precisa passar por revisão obrigatória. Agende o quanto antes para evitar bloqueio operacional.',
   },
   {
     id: '10',
     type: 'contrato_rescindido',
     title: 'Contrato rescindido',
-    message: 'Informamos que seu contrato foi rescindido. Entre em contato para alinhamento dos próximos passos.',
+    message:
+      'Informamos que seu contrato foi rescindido. Entre em contato para alinhamento dos próximos passos.',
   },
 ];
+
+function diffDays(date: string) {
+  const today = new Date();
+  const due = new Date(date);
+
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getAutoStatus(days: number): AutoAlert['status'] {
+  if (days < 0) return 'vencido';
+  if (days === 0) return 'vence_hoje';
+  return 'a_vencer';
+}
+
+function getDateValue(item: any) {
+  return (
+    item.due_date ||
+    item.dueDate ||
+    item.expiration_date ||
+    item.end_date ||
+    item.payment_due_date ||
+    item.next_inspection_date ||
+    item.date ||
+    null
+  );
+}
 
 export function AlertsCenter() {
   const supabase = getSupabaseBrowserClient() as any;
@@ -117,6 +165,9 @@ export function AlertsCenter() {
   const [newMessage, setNewMessage] = useState('');
   const [status, setStatus] = useState('');
 
+  const [alertsAuto, setAlertsAuto] = useState<AutoAlert[]>([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
   const selectedDriver = useMemo(
     () => drivers.find((d) => String(d.id) === String(driverId)),
     [drivers, driverId],
@@ -129,10 +180,15 @@ export function AlertsCenter() {
     : customMessage;
 
   useEffect(() => {
-    const saved = localStorage.getItem('ondrive_alert_templates');
+    const savedTemplates = localStorage.getItem('ondrive_alert_templates');
+    const savedDismissed = localStorage.getItem('ondrive_alertas_ok');
 
-    if (saved) {
-      setTemplates(JSON.parse(saved));
+    if (savedTemplates) {
+      setTemplates(JSON.parse(savedTemplates));
+    }
+
+    if (savedDismissed) {
+      setDismissedAlerts(JSON.parse(savedDismissed));
     }
   }, []);
 
@@ -153,6 +209,64 @@ export function AlertsCenter() {
     void loadDrivers();
   }, [supabase]);
 
+  useEffect(() => {
+    async function loadAutoAlerts() {
+      const result: AutoAlert[] = [];
+
+      const tables = [
+        { table: 'drivers', type: 'CNH', title: 'CNH do motorista' },
+        { table: 'fines', type: 'Multa', title: 'Multa próxima do vencimento' },
+        { table: 'contracts', type: 'Contrato', title: 'Contrato próximo do vencimento' },
+        { table: 'inspections', type: 'Vistoria', title: 'Vistoria próxima do vencimento' },
+      ];
+
+      for (const item of tables) {
+        const { data } = await supabase.from(item.table).select('*');
+
+        ((data as any[]) ?? []).forEach((row) => {
+          const date = getDateValue(row);
+
+          if (!date) return;
+
+          const days = diffDays(date);
+
+          if (days <= 3) {
+            const id = `${item.table}-${row.id}-${date}`;
+
+            result.push({
+              id,
+              type: item.type,
+              title:
+                row.name ||
+                row.title ||
+                row.description ||
+                row.plate ||
+                item.title,
+              date,
+              days,
+              status: getAutoStatus(days),
+            });
+          }
+        });
+      }
+
+      setAlertsAuto(result);
+    }
+
+    void loadAutoAlerts();
+  }, [supabase]);
+
+  const visibleAutoAlerts = alertsAuto.filter(
+    (alert) => !dismissedAlerts.includes(alert.id),
+  );
+
+  function dismissAlert(id: string) {
+    const updated = [...dismissedAlerts, id];
+
+    setDismissedAlerts(updated);
+    localStorage.setItem('ondrive_alertas_ok', JSON.stringify(updated));
+  }
+
   function selectTemplate(template: AlertTemplate) {
     setSelectedTemplateId(template.id);
     setCustomMessage(template.message);
@@ -164,9 +278,7 @@ export function AlertsCenter() {
 
     setTemplates((old) =>
       old.map((item) =>
-        item.id === selectedTemplateId
-          ? { ...item, message: customMessage }
-          : item,
+        item.id === selectedTemplateId ? { ...item, message: customMessage } : item,
       ),
     );
 
@@ -204,8 +316,77 @@ export function AlertsCenter() {
         </h2>
 
         <p style={{ color: '#64748b', fontSize: 14, marginTop: 0 }}>
-          Selecione o tipo de alerta, escolha uma mensagem pronta, edite se precisar e copie o texto.
+          Controle vencimentos automáticos e mensagens prontas para motoristas.
         </p>
+      </section>
+
+      <section className="card" style={{ padding: 24 }}>
+        <h3 style={{ marginTop: 0, fontSize: 18, fontWeight: 700 }}>
+          Vencimentos próximos
+        </h3>
+
+        {visibleAutoAlerts.length === 0 ? (
+          <p style={{ fontSize: 14, color: '#64748b' }}>
+            Nenhum vencimento próximo.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gap: 10 }}>
+            {visibleAutoAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                style={{
+                  borderRadius: 12,
+                  padding: 14,
+                  border: '1px solid #e5e7eb',
+                  background:
+                    alert.status === 'vencido'
+                      ? '#fee2e2'
+                      : alert.status === 'vence_hoje'
+                        ? '#fef3c7'
+                        : '#eff6ff',
+                }}
+              >
+                <strong>{alert.type}</strong>
+
+                <p style={{ margin: '6px 0' }}>{alert.title}</p>
+
+                <p style={{ margin: '6px 0' }}>
+                  Vencimento: {new Date(alert.date).toLocaleDateString('pt-BR')}
+                </p>
+
+                <p style={{ margin: '6px 0' }}>
+                  {alert.days < 0
+                    ? `Vencido há ${Math.abs(alert.days)} dia(s)`
+                    : alert.days === 0
+                      ? 'Vence hoje'
+                      : `Vence em ${alert.days} dia(s)`}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => dismissAlert(alert.id)}
+                  style={{
+                    marginTop: 6,
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#111827',
+                    color: '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card" style={{ padding: 24 }}>
+        <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
+          Tipos de mensagens
+        </h3>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           {Object.entries(alertTypes).map(([key, item]) => (
@@ -219,7 +400,10 @@ export function AlertsCenter() {
                 setStatus('');
               }}
               style={{
-                border: alertType === key ? `1px solid ${item.color}` : '1px solid #dbe3ef',
+                border:
+                  alertType === key
+                    ? `1px solid ${item.color}`
+                    : '1px solid #dbe3ef',
                 background: alertType === key ? item.bg : '#fff',
                 color: alertType === key ? item.color : '#334155',
                 padding: '9px 13px',
@@ -256,8 +440,12 @@ export function AlertsCenter() {
                 onClick={() => selectTemplate(template)}
                 style={{
                   textAlign: 'left',
-                  border: selectedTemplateId === template.id ? '1px solid #2563eb' : '1px solid #e2e8f0',
-                  background: selectedTemplateId === template.id ? '#eff6ff' : '#fff',
+                  border:
+                    selectedTemplateId === template.id
+                      ? '1px solid #2563eb'
+                      : '1px solid #e2e8f0',
+                  background:
+                    selectedTemplateId === template.id ? '#eff6ff' : '#fff',
                   borderRadius: 14,
                   padding: 14,
                   cursor: 'pointer',
@@ -266,6 +454,7 @@ export function AlertsCenter() {
                 <strong style={{ display: 'block', fontSize: 14, marginBottom: 6 }}>
                   {template.title}
                 </strong>
+
                 <span style={{ color: '#475569', fontSize: 13, lineHeight: 1.45 }}>
                   {template.message}
                 </span>
@@ -315,6 +504,7 @@ export function AlertsCenter() {
               style={{ fontSize: 14 }}
             >
               <option value="">Selecione</option>
+
               {drivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>
                   {driver.name} {driver.phone ? `· ${driver.phone}` : ''}
@@ -360,8 +550,7 @@ export function AlertsCenter() {
               lineHeight: 1.5,
             }}
           >
-            <strong>Prévia:</strong>{' '}
-            {finalMessage || 'Nenhuma mensagem selecionada.'}
+            <strong>Prévia:</strong> {finalMessage || 'Nenhuma mensagem selecionada.'}
           </div>
 
           {status ? (
