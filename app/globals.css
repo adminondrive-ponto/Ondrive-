@@ -74,17 +74,19 @@ button, input, select, textarea { font: inherit; }
 }
 
 .sidebar-footer {
-  margin-top: 24px;
+  margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  padding-bottom: 20px;
 }
 
 .support-btn {
   text-align: center;
-  background: #22c55e;
-  color: white;
-  border-color: #22c55e;
+  background: #22c55e !important;
+  color: #ffffff !important;
+  border-color: #22c55e !important;
+  font-weight: 600;
 }
 
 .main-content {
