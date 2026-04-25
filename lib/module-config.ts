@@ -18,11 +18,6 @@ const statusOptions = [
   { label: 'Inativo', value: 'inactive' },
 ];
 
-const simNaoOptions = [
-  { label: 'Sim', value: 'true' },
-  { label: 'Não', value: 'false' },
-];
-
 export const moduleConfigs = {
   veiculos: {
     slug: 'veiculos',
@@ -34,16 +29,26 @@ export const moduleConfigs = {
       { key: 'brand', label: 'Marca', type: 'text' },
       { key: 'model', label: 'Modelo', type: 'text' },
       { key: 'year', label: 'Ano', type: 'number' },
-      { key: 'status', label: 'Status', type: 'select', options: [
-        { label: 'Disponível', value: 'available' },
-        { label: 'Alugado', value: 'rented' },
-        { label: 'Vendido', value: 'sold' },
-        { label: 'Manutenção', value: 'maintenance' },
-      ] },
-      { key: 'financing_status', label: 'Quitado ou financiado', type: 'select', options: [
-        { label: 'Quitado', value: 'quitado' },
-        { label: 'Financiado', value: 'financiado' },
-      ] },
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+          { label: 'Disponível', value: 'available' },
+          { label: 'Alugado', value: 'rented' },
+          { label: 'Vendido', value: 'sold' },
+          { label: 'Manutenção', value: 'maintenance' },
+        ],
+      },
+      {
+        key: 'financing_status',
+        label: 'Quitado ou financiado',
+        type: 'select',
+        options: [
+          { label: 'Quitado', value: 'quitado' },
+          { label: 'Financiado', value: 'financiado' },
+        ],
+      },
       { key: 'installments_total', label: 'Quantidade de parcelas', type: 'number' },
       { key: 'installment_value', label: 'Valor da parcela', type: 'number' },
       { key: 'financing_end_date', label: 'Data final do financiamento', type: 'date' },
@@ -51,6 +56,7 @@ export const moduleConfigs = {
     ],
     listColumns: ['plate', 'brand', 'model', 'year', 'status', 'financing_status'],
   },
+
   motoristas: {
     slug: 'motoristas',
     title: 'Motoristas',
@@ -65,52 +71,108 @@ export const moduleConfigs = {
       { key: 'latitude', label: 'Latitude', type: 'number' },
       { key: 'longitude', label: 'Longitude', type: 'number' },
       { key: 'cnh_due_date', label: 'Vencimento da CNH', type: 'date' },
-      { key: 'payment_weekday', label: 'Dia da semana do pagamento', type: 'select', options: [
-        { label: 'Segunda-feira', value: 'monday' },
-        { label: 'Terça-feira', value: 'tuesday' },
-        { label: 'Quarta-feira', value: 'wednesday' },
-        { label: 'Quinta-feira', value: 'thursday' },
-        { label: 'Sexta-feira', value: 'friday' },
-      ] },
+      {
+        key: 'payment_weekday',
+        label: 'Dia da semana do pagamento',
+        type: 'select',
+        options: [
+          { label: 'Segunda-feira', value: 'monday' },
+          { label: 'Terça-feira', value: 'tuesday' },
+          { label: 'Quarta-feira', value: 'wednesday' },
+          { label: 'Quinta-feira', value: 'thursday' },
+          { label: 'Sexta-feira', value: 'friday' },
+        ],
+      },
       { key: 'driver_score', label: 'Score do motorista', type: 'number' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
     listColumns: ['name', 'cpf', 'phone', 'payment_weekday', 'cnh_due_date', 'driver_score'],
   },
+
   multas: {
     slug: 'multas',
     title: 'Multas',
     table: 'fines',
     orderBy: { column: 'created_at', ascending: false },
     fields: [
-      { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-      { key: 'driver_id', label: 'Motorista', type: 'select', relation: { table: 'drivers', valueKey: 'id', labelKey: 'name', secondaryLabelKey: 'phone', orderBy: { column: 'name', ascending: true } } },
+      {
+        key: 'vehicle_id',
+        label: 'Veículo',
+        type: 'select',
+        relation: {
+          table: 'vehicles',
+          valueKey: 'id',
+          labelKey: 'plate',
+          secondaryLabelKey: 'model',
+          orderBy: { column: 'plate', ascending: true },
+        },
+      },
+      {
+        key: 'driver_id',
+        label: 'Motorista',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          secondaryLabelKey: 'phone',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
       { key: 'date', label: 'Data', type: 'date', required: true },
       { key: 'due_date', label: 'Data de vencimento', type: 'date' },
       { key: 'amount', label: 'Valor', type: 'number' },
-      { key: 'status', label: 'Status', type: 'select', options: [
-        { label: 'Pendente', value: 'pending' },
-        { label: 'Pago', value: 'paid' },
-        { label: 'Recorrido', value: 'appealed' },
-      ] },
+      {
+        key: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+          { label: 'Pendente', value: 'pending' },
+          { label: 'Pago', value: 'paid' },
+          { label: 'Recorrido', value: 'appealed' },
+        ],
+      },
       { key: 'description', label: 'Descrição', type: 'textarea' },
     ],
     listColumns: ['date', 'vehicle_id', 'driver_id', 'amount', 'due_date', 'status'],
   },
+
   vistorias: {
     slug: 'vistorias',
     title: 'Vistorias',
     table: 'inspections',
     orderBy: { column: 'created_at', ascending: false },
     fields: [
-      { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-      { key: 'driver_id', label: 'Motorista', type: 'select', relation: { table: 'drivers', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
+      {
+        key: 'vehicle_id',
+        label: 'Veículo',
+        type: 'select',
+        relation: {
+          table: 'vehicles',
+          valueKey: 'id',
+          labelKey: 'plate',
+          secondaryLabelKey: 'model',
+          orderBy: { column: 'plate', ascending: true },
+        },
+      },
+      {
+        key: 'driver_id',
+        label: 'Motorista',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
       { key: 'date', label: 'Data', type: 'date', required: true },
       { key: 'completed', label: 'Concluída', type: 'checkbox' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
     listColumns: ['date', 'vehicle_id', 'driver_id', 'completed', 'notes'],
   },
+
   socios: {
     slug: 'socios',
     title: 'Sócios',
@@ -121,15 +183,21 @@ export const moduleConfigs = {
       { key: 'phone', label: 'Telefone', type: 'text' },
       { key: 'cpf', label: 'CPF/CNPJ', type: 'text' },
       { key: 'active_cars', label: 'Carros ativos', type: 'number' },
-      { key: 'partnership_type', label: 'Tipo de parceria', type: 'select', options: [
-        { label: 'Carros ativos', value: 'carros_ativos' },
-        { label: 'Investidor', value: 'investidor' },
-        { label: 'Administração', value: 'administracao' },
-      ] },
+      {
+        key: 'partnership_type',
+        label: 'Tipo de parceria',
+        type: 'select',
+        options: [
+          { label: 'Carros ativos', value: 'carros_ativos' },
+          { label: 'Investidor', value: 'investidor' },
+          { label: 'Administração', value: 'administracao' },
+        ],
+      },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
     listColumns: ['name', 'phone', 'cpf', 'active_cars', 'partnership_type'],
   },
+
   financeiro: {
     slug: 'financeiro',
     title: 'Financeiro',
@@ -137,44 +205,114 @@ export const moduleConfigs = {
     orderBy: { column: 'date', ascending: false },
     fields: [
       { key: 'date', label: 'Data', type: 'date', required: true },
-      { key: 'category', label: 'Categoria', type: 'select', required: true, options: [
-        { label: 'Entrada', value: 'revenue' },
-        { label: 'Despesa', value: 'expense' },
-      ] },
-      { key: 'amount', label: 'Valor', type: 'number', required: true },
-      { key: 'repasse_value', label: 'Valor de repasse', type: 'number' },
-      { key: 'investor_id', label: 'Sócio', type: 'select', relation: { table: 'investors', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
-      { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-      { key: 'description', label: 'Descrição', type: 'textarea' },
-      { key: 'notes', label: 'Observações', type: 'textarea' },
+      { key: 'rent_value', label: 'Valor do aluguel', type: 'number' },
+      { key: 'adm_fee', label: 'Repasse do ADM', type: 'number' },
+      { key: 'repasse_value', label: 'Repasse do sócio', type: 'number' },
+      { key: 'expense_value', label: 'Valor da despesa', type: 'number' },
+      { key: 'description', label: 'Descrição da despesa', type: 'textarea' },
+      {
+        key: 'vehicle_id',
+        label: 'Veículo',
+        type: 'select',
+        relation: {
+          table: 'vehicles',
+          valueKey: 'id',
+          labelKey: 'plate',
+          secondaryLabelKey: 'model',
+          orderBy: { column: 'plate', ascending: true },
+        },
+      },
+      {
+        key: 'driver_id',
+        label: 'Motorista',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
+      { key: 'nf_photo', label: 'Foto da NF (JPG)', type: 'file' },
     ],
-    listColumns: ['date', 'category', 'amount', 'repasse_value', 'investor_id', 'vehicle_id', 'notes'],
+    listColumns: [
+      'date',
+      'rent_value',
+      'adm_fee',
+      'repasse_value',
+      'expense_value',
+      'vehicle_id',
+      'driver_id',
+    ],
   },
+
   contratos: {
     slug: 'contratos',
     title: 'Contratos',
     table: 'contracts',
     orderBy: { column: 'created_at', ascending: false },
     fields: [
-      { key: 'driver_id', label: 'Motorista', type: 'select', relation: { table: 'drivers', valueKey: 'id', labelKey: 'name', secondaryLabelKey: 'phone', orderBy: { column: 'name', ascending: true } } },
-      { key: 'investor_id', label: 'Sócio', type: 'select', relation: { table: 'investors', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
-      { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-      { key: 'contract_kind', label: 'Tipo de contrato', type: 'select', options: [
-        { label: 'Aluguel', value: 'aluguel' },
-        { label: 'Venda em forma de aluguel', value: 'venda_aluguel' },
-      ] },
+      {
+        key: 'driver_id',
+        label: 'Motorista',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          secondaryLabelKey: 'phone',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
+      {
+        key: 'investor_id',
+        label: 'Sócio',
+        type: 'select',
+        relation: {
+          table: 'investors',
+          valueKey: 'id',
+          labelKey: 'name',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
+      {
+        key: 'vehicle_id',
+        label: 'Veículo',
+        type: 'select',
+        relation: {
+          table: 'vehicles',
+          valueKey: 'id',
+          labelKey: 'plate',
+          secondaryLabelKey: 'model',
+          orderBy: { column: 'plate', ascending: true },
+        },
+      },
+      {
+        key: 'contract_kind',
+        label: 'Tipo de contrato',
+        type: 'select',
+        options: [
+          { label: 'Aluguel', value: 'aluguel' },
+          { label: 'Venda em forma de aluguel', value: 'venda_aluguel' },
+        ],
+      },
       { key: 'start_date', label: 'Data de início', type: 'date', required: true },
       { key: 'end_date', label: 'Data de fim', type: 'date' },
       { key: 'status', label: 'Status', type: 'select', options: statusOptions },
       { key: 'rent_value', label: 'Valor do aluguel', type: 'number' },
       { key: 'repasse_value', label: 'Valor de repasse', type: 'number' },
-      { key: 'payment_weekday', label: 'Dia da semana do pagamento do aluguel', type: 'select', options: [
-        { label: 'Segunda-feira', value: 'monday' },
-        { label: 'Terça-feira', value: 'tuesday' },
-        { label: 'Quarta-feira', value: 'wednesday' },
-        { label: 'Quinta-feira', value: 'thursday' },
-        { label: 'Sexta-feira', value: 'friday' },
-      ] },
+      {
+        key: 'payment_weekday',
+        label: 'Dia da semana do pagamento do aluguel',
+        type: 'select',
+        options: [
+          { label: 'Segunda-feira', value: 'monday' },
+          { label: 'Terça-feira', value: 'tuesday' },
+          { label: 'Quarta-feira', value: 'wednesday' },
+          { label: 'Quinta-feira', value: 'thursday' },
+          { label: 'Sexta-feira', value: 'friday' },
+        ],
+      },
       { key: 'monthly_payment_day', label: 'Dia mensal do pagamento de venda', type: 'number' },
       { key: 'allowed_delay_days', label: 'Dias de atraso permitido', type: 'number' },
       { key: 'late_fee', label: 'Multa por atraso', type: 'number' },
@@ -182,7 +320,16 @@ export const moduleConfigs = {
       { key: 'photos_url', label: 'Link das fotos/documentos', type: 'text' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
-    listColumns: ['driver_id', 'vehicle_id', 'contract_kind', 'start_date', 'end_date', 'status', 'rent_value', 'repasse_value'],
+    listColumns: [
+      'driver_id',
+      'vehicle_id',
+      'contract_kind',
+      'start_date',
+      'end_date',
+      'status',
+      'rent_value',
+      'repasse_value',
+    ],
   },
 } satisfies Record<string, CrudModuleConfig>;
 
