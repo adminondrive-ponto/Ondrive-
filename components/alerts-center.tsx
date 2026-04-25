@@ -19,6 +19,16 @@ type Fine = {
   status?: string;
 };
 
+type FinancialEntry = {
+  id: string;
+  date?: string;
+  due_date?: string;
+  driver_id?: string | null;
+  rent_value?: number | string | null;
+  rental_value?: number | string | null;
+  status?: string | null;
+};
+
 type AlertRow = {
   id: string;
   alert_key?: string | null;
@@ -33,6 +43,12 @@ type AlertRow = {
 };
 
 export function AlertsCenter() {
+   function formatarData(data?: string) {
+    if (!data) return '';
+    const d = new Date(`${data}T00:00:00`);
+    return d.toLocaleDateString('pt-BR');
+  }
+
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [phone, setPhone] = useState('');
@@ -48,12 +64,19 @@ export function AlertsCenter() {
   async function carregarDados() {
     const { data: driversData } = await supabase.from('drivers').select('*');
     const { data: finesData } = await supabase.from('fines').select('*');
+    const { data: vehiclesData } = await supabase.from('vehicles').select('*');
+    const { data: financialData } = await supabase
+      .from('financial_entries')
+      .select('*');
+
     const { data: existingAlertsData } = await supabase
       .from('alerts')
       .select('alert_key, status');
 
     const driversList = (driversData || []) as Driver[];
     const finesList = (finesData || []) as Fine[];
+    const vehiclesList = vehiclesData || [];
+    const financialList = (financialData || []) as FinancialEntry[];
     const existingAlerts = existingAlertsData || [];
 
     setDrivers(driversList);
@@ -171,6 +194,117 @@ export function AlertsCenter() {
       }
     });
 
+    vehiclesList.forEach((vehicle: any) => {
+      if (!vehicle.next_revision) return;
+
+      const vencimento = new Date(vehicle.next_revision);
+      vencimento.setHours(0, 0, 0, 0);
+
+      const diffDias = Math.ceil(
+        (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      const driver = driversList.find(
+        (item) => String(item.id) === String(vehicle.driver_id),
+      );
+
+      const telefone = driver?.phone || driver?.telefone || null;
+      const placa = vehicle.plate || 'sem placa';
+
+      if (diffDias >= 0 && diffDias <= 3) {
+        const alertKey = `vistoria-warning-${vehicle.id}-${vehicle.next_revision}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'warning',
+            alert_type: 'Vistoria próxima do vencimento',
+            title: 'Vistoria próxima do vencimento',
+            message: `Aviso: a vistoria do veículo ${placa} vence em ${diffDias} dia(s).`,
+            driver_id: vehicle.driver_id || null,
+            phone: telefone,
+            status: 'active',
+          });
+        }
+      }
+
+      if (diffDias < 0) {
+        const alertKey = `vistoria-danger-${vehicle.id}-${vehicle.next_revision}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'danger',
+            alert_type: 'Vistoria vencida',
+            title: 'Vistoria vencida',
+            message: `Vencido: a vistoria do veículo ${placa} está atrasada.`,
+            driver_id: vehicle.driver_id || null,
+            phone: telefone,
+            status: 'active',
+          });
+        }
+      }
+    });
+
+        financialList.forEach((entry) => {
+      const rentValue = Number(entry.rent_value ?? entry.rental_value ?? 0);
+
+      if (!entry.due_date || rentValue <= 0) return;
+
+      const vencimento = new Date(entry.due_date);
+      vencimento.setHours(0, 0, 0, 0);
+
+      const diffDias = Math.ceil(
+        (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      const driver = driversList.find(
+        (item) => String(item.id) === String(entry.driver_id),
+      );
+
+      const nome = driver?.name || driver?.nome || 'motorista';
+      const telefone = driver?.phone || driver?.telefone || null;
+
+      if (diffDias >= 0 && diffDias <= 3) {
+        const alertKey = `rent-warning-${entry.id}-${entry.due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'warning',
+            alert_type: 'Aluguel chegando no vencimento',
+            title: 'Aluguel chegando no vencimento',
+            message: `Aviso: o aluguel de ${nome} vence em ${diffDias} dia(s), considerando a data de vencimento cadastrada no financeiro (${formatarData(entry.due_date)}). Valor: R$ ${rentValue.toFixed(2)}.`,
+            driver_id: entry.driver_id || null,
+            phone: telefone,
+            status: 'active',
+          });
+        }
+      }
+
+      if (diffDias < 0) {
+        const alertKey = `rent-danger-${entry.id}-${entry.due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'danger',
+            alert_type: 'Aluguel vencido',
+            title: 'Aluguel vencido',
+            message: `Vencido: o aluguel de ${nome} está atrasado, considerando a data de vencimento cadastrada no financeiro (${formatarData(entry.due_date)}). Valor: R$ ${rentValue.toFixed(2)}.`,
+            driver_id: entry.driver_id || null,
+            phone: telefone,
+            status: 'active',
+          });
+        }
+      }
+    });
+
+
     if (newAutoAlerts.length > 0) {
       await supabase.from('alerts').insert(newAutoAlerts);
     }
@@ -282,6 +416,7 @@ export function AlertsCenter() {
 
     setAlerts((prev) => prev.filter((item) => item.id !== alerta.id));
   }
+  
 
   function abrirWhatsApp() {
     const cleanPhone = phone.replace(/\D/g, '');

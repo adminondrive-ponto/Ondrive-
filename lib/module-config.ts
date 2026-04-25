@@ -19,7 +19,8 @@ const statusOptions = [
 ];
 
 export const moduleConfigs = {
-  veiculos: {
+
+ veiculos: {
     slug: 'veiculos',
     title: 'Veículos',
     table: 'vehicles',
@@ -29,6 +30,29 @@ export const moduleConfigs = {
       { key: 'brand', label: 'Marca', type: 'text' },
       { key: 'model', label: 'Modelo', type: 'text' },
       { key: 'year', label: 'Ano', type: 'number' },
+
+      {
+        key: 'driver_id',
+        label: 'Motorista vinculado',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          secondaryLabelKey: 'phone',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
+
+      { key: 'chassis', label: 'Chassi', type: 'text' },
+      { key: 'renavan', label: 'Renavam', type: 'text' },
+      { key: 'color', label: 'Cor do carro', type: 'text' },
+      { key: 'km_initial', label: 'KM inicial', type: 'number' },
+      { key: 'km_per_month', label: 'KM mensal', type: 'number' },
+      { key: 'last_maintenance', label: 'Data da última vistoria', type: 'date' },
+      { key: 'next_revision', label: 'Data da próxima vistoria', type: 'date' },
+      { key: 'vehicle_photo_url', label: 'Foto do documento do carro (JPG)', type: 'file' },
+
       {
         key: 'status',
         label: 'Status',
@@ -36,7 +60,7 @@ export const moduleConfigs = {
         options: [
           { label: 'Disponível', value: 'available' },
           { label: 'Alugado', value: 'rented' },
-          { label: 'Vendido', value: 'sold' },
+          { label: 'Vendido em forma de aluguel', value: 'sold' },
           { label: 'Manutenção', value: 'maintenance' },
         ],
       },
@@ -54,9 +78,21 @@ export const moduleConfigs = {
       { key: 'financing_end_date', label: 'Data final do financiamento', type: 'date' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
-    listColumns: ['plate', 'brand', 'model', 'year', 'status', 'financing_status'],
+    listColumns: [
+      'plate',
+      'brand',
+      'model',
+      'year',
+      'driver_id',
+      'color',
+      'km_initial',
+      'km_per_month',
+      'last_maintenance',
+      'next_revision',
+      'status',
+      'financing_status',
+    ],
   },
-
   motoristas: {
     slug: 'motoristas',
     title: 'Motoristas',

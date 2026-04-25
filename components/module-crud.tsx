@@ -592,49 +592,66 @@ if (config.slug === 'financeiro') {
     }
   }
 
-  async function uploadFile(field: ModuleField, file: File) {
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
+ async function uploadFile(field: ModuleField, file: File) {
+  setSaving(true);
+  setError(null);
+  setSuccess(null);
 
-    try {
-      const extension = file.name.split('.').pop() ?? 'jpg';
+  try {
+    const extension = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
 
-      const fileName = `${config.slug}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}.${extension}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('notas-fiscais')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (uploadError) throw new Error(uploadError.message);
-
-      updateField(field, fileName);
-      setSuccess('Imagem enviada com sucesso. Agora salve o registro.');
-    } catch (err) {
-      setError(getSupabaseErrorMessage(err, 'Erro ao enviar imagem.'));
-    } finally {
-      setSaving(false);
+    // valida tipo de arquivo
+    if (!['jpg', 'jpeg', 'png'].includes(extension)) {
+      throw new Error('Envie apenas imagem JPG, JPEG ou PNG.');
     }
+
+    const bucketName = 'notas-fiscais';
+
+    const folderName =
+      config.slug === 'veiculos'
+        ? 'documentos-veiculos'
+        : config.slug;
+
+    const fileName = `${folderName}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (uploadError) throw new Error(uploadError.message);
+
+    updateField(field, fileName);
+    setSuccess('Imagem enviada com sucesso. Agora salve o registro.');
+  } catch (err) {
+    setError(getSupabaseErrorMessage(err, 'Erro ao enviar imagem.'));
+  } finally {
+    setSaving(false);
   }
+}
 
   return (
     <div
       className="grid-two"
-      style={
-        config.slug === 'financeiro'
-          ? {
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 20,
-              alignItems: 'start',
-            }
-          : undefined
+   style={
+  config.slug === 'financeiro' || config.slug === 'veiculos'
+    ? {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)',
+        gap: 20,
+        alignItems: 'start',
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }
+    : undefined
+}
+
     >
       <section className="card">
         <div className="page-header" style={{ marginBottom: 16 }}>
@@ -661,7 +678,15 @@ if (config.slug === 'financeiro') {
   </div>
 ) : null}
 
-        <form onSubmit={handleSubmit} className="form-grid">
+        <form
+  onSubmit={handleSubmit}
+  className="form-grid"
+  style={{
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  }}
+>
           {config.fields.map((field) => (
             <div
               className={`field ${field.type === 'textarea' ? 'full' : ''}`}
