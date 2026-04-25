@@ -39,7 +39,6 @@ function formatarData(data?: string) {
   if (!data) return 'Sem data';
 
   const value = new Date(`${data}T00:00:00`);
-
   if (Number.isNaN(value.getTime())) return 'Sem data';
 
   return value.toLocaleDateString('pt-BR');
@@ -61,7 +60,6 @@ function diasAte(data?: string) {
 
 function linkWhatsApp(phone?: string, message?: string) {
   const telefone = String(phone || '').replace(/\D/g, '');
-
   if (!telefone) return '#';
 
   return `https://wa.me/55${telefone}?text=${encodeURIComponent(message || '')}`;
@@ -89,6 +87,9 @@ export async function AlertsCenter() {
   }[] = [];
 
   drivers.forEach((driver) => {
+    const phone = telefoneMotorista(driver);
+    if (!phone) return;
+
     const cnhDate = driver.cnh_expiration || driver.cnh_vencimento;
     const days = diasAte(cnhDate);
 
@@ -114,9 +115,12 @@ export async function AlertsCenter() {
   });
 
   fines.forEach((fine) => {
+    const driver = drivers.find((item) => String(item.id) === String(fine.driver_id));
+    const phone = telefoneMotorista(driver);
+    if (!driver || !phone) return;
+
     const fineDate = fine.due_date || fine.vencimento || fine.date;
     const days = diasAte(fineDate);
-    const driver = drivers.find((item) => String(item.id) === String(fine.driver_id));
 
     if (days !== null && days >= 0 && days <= 3) {
       automaticAlerts.push({
@@ -140,6 +144,10 @@ export async function AlertsCenter() {
   });
 
   contracts.forEach((contract) => {
+    const driver = drivers.find((item) => String(item.id) === String(contract.driver_id));
+    const phone = telefoneMotorista(driver);
+    if (!driver || !phone) return;
+
     const paymentDate =
       contract.rent_due_date ||
       contract.payment_due_date ||
@@ -147,7 +155,6 @@ export async function AlertsCenter() {
       contract.vencimento_pagamento;
 
     const days = diasAte(paymentDate);
-    const driver = drivers.find((item) => String(item.id) === String(contract.driver_id));
 
     if (days !== null && days >= 0 && days <= 3) {
       automaticAlerts.push({
@@ -240,17 +247,13 @@ export async function AlertsCenter() {
                   </small>
                 </div>
 
-                {telefoneMotorista(alert.driver) ? (
-                  <a
-                    className="whatsButton"
-                    href={linkWhatsApp(telefoneMotorista(alert.driver), alert.message)}
-                    target="_blank"
-                  >
-                    Enviar WhatsApp
-                  </a>
-                ) : (
-                  <span className="noPhone">Sem telefone</span>
-                )}
+                <a
+                  className="whatsButton"
+                  href={linkWhatsApp(telefoneMotorista(alert.driver), alert.message)}
+                  target="_blank"
+                >
+                  Enviar WhatsApp
+                </a>
               </div>
             ))
           )}
@@ -271,11 +274,7 @@ export async function AlertsCenter() {
             <select id="driverSelect">
               <option value="">Selecione o motorista</option>
               {drivers.map((driver) => (
-                <option
-                  key={driver.id}
-                  value={driver.id}
-                  data-phone={telefoneMotorista(driver)}
-                >
+                <option key={driver.id} value={driver.id} data-phone={telefoneMotorista(driver)}>
                   {nomeMotorista(driver)}
                 </option>
               ))}
@@ -284,7 +283,7 @@ export async function AlertsCenter() {
 
           <label>
             Telefone
-            <input id="driverPhone" placeholder="Telefone do motorista" readOnly />
+            <input id="driverPhone" placeholder="Digite ou selecione o telefone" />
           </label>
         </div>
 
@@ -308,7 +307,6 @@ export async function AlertsCenter() {
               const phone = document.getElementById('driverPhone')?.value || '';
               const message = document.getElementById('alertMessage')?.value || '';
               const link = document.getElementById('manualWhatsApp');
-
               if (!link) return;
 
               const cleanPhone = phone.replace(/\\D/g, '');
@@ -350,8 +348,12 @@ export async function AlertsCenter() {
               });
             }
 
-            const messageInput = document.getElementById('alertMessage');
+            const phoneInput = document.getElementById('driverPhone');
+            if (phoneInput) {
+              phoneInput.addEventListener('input', atualizarWhatsApp);
+            }
 
+            const messageInput = document.getElementById('alertMessage');
             if (messageInput) {
               messageInput.addEventListener('input', atualizarWhatsApp);
             }
@@ -489,15 +491,6 @@ export async function AlertsCenter() {
 
         .actions button {
           background: #2563eb;
-        }
-
-        .noPhone {
-          background: #f1f5f9;
-          color: #475569;
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 700;
         }
 
         .formGrid {
