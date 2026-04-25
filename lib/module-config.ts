@@ -37,7 +37,6 @@ export const moduleConfigs = {
       { key: 'brand', label: 'Marca', type: 'text' },
       { key: 'model', label: 'Modelo', type: 'text' },
       { key: 'year', label: 'Ano', type: 'number' },
-
       {
         key: 'status',
         label: 'Status',
@@ -50,13 +49,11 @@ export const moduleConfigs = {
           { label: 'Vendido', value: 'sold' },
         ],
       },
-
       { key: 'chassis', label: 'Chassi', type: 'text' },
       { key: 'color', label: 'Cor', type: 'text' },
       { key: 'initial_km', label: 'KM inicial', type: 'number' },
       { key: 'monthly_km', label: 'KM mensal', type: 'number' },
       { key: 'vehicle_photo_url', label: 'Foto do veículo JPG', type: 'file' },
-
       {
         key: 'financing_status',
         label: 'Quitado ou financiado',
@@ -66,7 +63,6 @@ export const moduleConfigs = {
           { label: 'Financiado', value: 'financiado' },
         ],
       },
-
       { key: 'financing_start_date', label: 'Data de início do financiamento', type: 'date' },
       { key: 'installments_total', label: 'Quantidade de parcelas', type: 'number' },
       { key: 'installment_value', label: 'Valor da parcela', type: 'number' },
@@ -119,7 +115,6 @@ export const moduleConfigs = {
       { key: 'driver_id', label: 'Motorista', type: 'select', relation: { table: 'drivers', valueKey: 'id', labelKey: 'name', secondaryLabelKey: 'phone', orderBy: { column: 'name', ascending: true } } },
       { key: 'investor_id', label: 'Sócio', type: 'select', relation: { table: 'investors', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
       { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-
       {
         key: 'contract_kind',
         label: 'Tipo de contrato',
@@ -129,7 +124,6 @@ export const moduleConfigs = {
           { label: 'Venda em forma de aluguel', value: 'venda_aluguel' },
         ],
       },
-
       { key: 'start_date', label: 'Data de início', type: 'date', required: true },
       { key: 'end_date', label: 'Data de fim', type: 'date' },
       { key: 'status', label: 'Status', type: 'select', options: statusContratoOptions },
@@ -139,14 +133,12 @@ export const moduleConfigs = {
       { key: 'monthly_payment_day', label: 'Dia mensal do pagamento de venda', type: 'number' },
       { key: 'allowed_delay_days', label: 'Dias de atraso permitido', type: 'number' },
       { key: 'late_fee', label: 'Multa por atraso', type: 'number' },
-
       { key: 'signed_contract_file_url', label: 'Contrato assinado/PDF', type: 'file' },
       { key: 'cnh_file_url', label: 'CNH', type: 'file' },
       { key: 'criminal_record_file_url', label: 'Antecedentes criminais', type: 'file' },
       { key: 'app_photos_url', label: 'Fotos dos apps', type: 'file' },
       { key: 'social_media_photo_url', label: 'Foto da rede social', type: 'file' },
       { key: 'house_photo_url', label: 'Foto da casa', type: 'file' },
-
       { key: 'reference_contact_1', label: 'Contato de referência 1', type: 'text' },
       { key: 'reference_contact_2', label: 'Contato de referência 2', type: 'text' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
@@ -220,23 +212,37 @@ export const moduleConfigs = {
     fields: [
       { key: 'date', label: 'Data', type: 'date', required: true },
       {
-        key: 'category',
-        label: 'Categoria',
+        key: 'entry_type',
+        label: 'Tipo de lançamento',
         type: 'select',
         required: true,
         options: [
-          { label: 'Entrada', value: 'revenue' },
-          { label: 'Despesa', value: 'expense' },
+          { label: 'Aluguel', value: 'aluguel' },
+          { label: 'Gasto', value: 'gasto' },
         ],
       },
-      { key: 'amount', label: 'Valor', type: 'number', required: true },
-      { key: 'repasse_value', label: 'Valor de repasse', type: 'number' },
-      { key: 'investor_id', label: 'Sócio', type: 'select', relation: { table: 'investors', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
       { key: 'vehicle_id', label: 'Veículo', type: 'select', relation: { table: 'vehicles', valueKey: 'id', labelKey: 'plate', secondaryLabelKey: 'model', orderBy: { column: 'plate', ascending: true } } },
-      { key: 'description', label: 'Descrição', type: 'textarea' },
+      { key: 'investor_id', label: 'Sócio', type: 'select', relation: { table: 'investors', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
+      { key: 'driver_id', label: 'Motorista', type: 'select', relation: { table: 'drivers', valueKey: 'id', labelKey: 'name', orderBy: { column: 'name', ascending: true } } },
+      { key: 'expense_type', label: 'Tipo de gasto', type: 'text' },
+      { key: 'expense_description', label: 'Descrição do gasto', type: 'textarea' },
+      { key: 'rental_value', label: 'Valor do aluguel', type: 'number' },
+      { key: 'expense_value', label: 'Valor gasto', type: 'number' },
+      { key: 'admin_fee', label: 'Parte da administração', type: 'number' },
+      { key: 'partner_transfer_value', label: 'Repasse ao sócio', type: 'number' },
+      { key: 'payment_method', label: 'Forma de pagamento', type: 'text' },
+      { key: 'invoice_file_url', label: 'Nota fiscal (link)', type: 'text' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
-    listColumns: ['date', 'category', 'amount', 'repasse_value', 'investor_id', 'vehicle_id', 'notes'],
+    listColumns: [
+      'date',
+      'entry_type',
+      'vehicle_id',
+      'investor_id',
+      'rental_value',
+      'expense_value',
+      'partner_transfer_value',
+    ],
   },
 } satisfies Record<string, CrudModuleConfig>;
 
