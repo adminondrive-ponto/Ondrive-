@@ -1,384 +1,521 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-type Vehicle = {
-  id: string;
-  plate: string | null;
-  model: string | null;
-  brand: string | null;
-  status: string | null;
-};
-
-type Person = {
-  id: string;
-  name: string | null;
-  status: string | null;
-};
-
-function normalizar(valor: string | null | undefined) {
-  return String(valor ?? '').toLowerCase();
+function normalizarStatus(valor: any) {
+  return String(valor || '').toLowerCase().trim();
 }
 
-function statusVeiculo(status: string | null | undefined) {
-  const s = normalizar(status);
-
-  if (s.includes('available') || s.includes('dispon')) return 'Disponível';
-  if (s.includes('rented') || s.includes('alug')) return 'Alugado';
-  if (s.includes('maintenance') || s.includes('manut')) return 'Em manutenção';
-  if (s.includes('sold') || s.includes('sale') || s.includes('vend')) return 'Vendido por aluguel';
-
-  return status || 'Não informado';
+function contarPorStatus(lista: any[], statusBuscado: string) {
+  return lista.filter((item) => normalizarStatus(item.status) === statusBuscado).length;
 }
 
-function statusPessoa(status: string | null | undefined) {
-  const s = normalizar(status);
+function textoStatus(valor: any) {
+  const status = normalizarStatus(valor);
 
-  if (s.includes('inactive') || s.includes('inativo')) return 'Inativo';
-  if (s.includes('active') || s.includes('ativo')) return 'Ativo';
+  if (status === 'alugado') return 'Alugado';
+  if (status === 'disponivel' || status === 'disponível') return 'Disponível';
+  if (status === 'vendido') return 'Vendido';
+  if (status === 'manutencao' || status === 'manutenção' || status === 'em manutenção') return 'Em manutenção';
 
-  return 'Ativo';
+  return valor || 'Não informado';
 }
 
-function corStatus(status: string) {
-  const s = normalizar(status);
+function badgeClasse(valor: any) {
+  const status = normalizarStatus(valor);
 
-  if (s.includes('dispon') || s.includes('ativo')) return '#22c55e';
-  if (s.includes('alug')) return '#2563eb';
-  if (s.includes('vend')) return '#7c3aed';
-  if (s.includes('manut') || s.includes('inativo')) return '#f59e0b';
+  if (status.includes('ativo') || status.includes('dispon')) return 'badge green';
+  if (status.includes('alug')) return 'badge blue';
+  if (status.includes('vend')) return 'badge purple';
+  if (status.includes('manut')) return 'badge orange';
+  if (status.includes('inativo')) return 'badge gray';
 
-  return '#64748b';
-}
-
-function Card({ titulo, valor }: { titulo: string; valor: number }) {
-  return (
-    <div className="card-indicador">
-      <span>{titulo}</span>
-      <strong>{valor}</strong>
-    </div>
-  );
-}
-
-function ListaVeiculos({ vehicles }: { vehicles: Vehicle[] }) {
-  return (
-    <div className="lista-card">
-      <h3>Veículos</h3>
-
-      <div className="lista-cabecalho">
-        <span>Nome</span>
-        <span>Status</span>
-      </div>
-
-      <div className="lista-corpo">
-        {vehicles.length === 0 ? (
-          <p className="vazio">Nenhum registro encontrado.</p>
-        ) : (
-          vehicles.map((v) => {
-            const status = statusVeiculo(v.status);
-
-            return (
-              <div className="lista-linha" key={v.id}>
-                <span>
-                  {v.plate || 'Sem placa'} - {[v.brand, v.model].filter(Boolean).join(' ') || 'Veículo'}
-                </span>
-
-                <span className="status">
-                  <i style={{ backgroundColor: corStatus(status) }} />
-                  {status}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="lista-rodape">
-        <span>Mostrando {vehicles.length} de {vehicles.length}</span>
-        <div>
-          <button disabled>‹</button>
-          <strong>1</strong>
-          <button disabled>›</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ListaPessoas({
-  titulo,
-  pessoas,
-}: {
-  titulo: string;
-  pessoas: Person[];
-}) {
-  return (
-    <div className="lista-card">
-      <h3>{titulo}</h3>
-
-      <div className="lista-cabecalho">
-        <span>Nome</span>
-        <span>Status</span>
-      </div>
-
-      <div className="lista-corpo">
-        {pessoas.length === 0 ? (
-          <p className="vazio">Nenhum registro encontrado.</p>
-        ) : (
-          pessoas.map((p) => {
-            const status = statusPessoa(p.status);
-
-            return (
-              <div className="lista-linha" key={p.id}>
-                <span>{p.name || 'Nome não informado'}</span>
-
-                <span className="status">
-                  <i style={{ backgroundColor: corStatus(status) }} />
-                  {status}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="lista-rodape">
-        <span>Mostrando {pessoas.length} de {pessoas.length}</span>
-        <div>
-          <button disabled>‹</button>
-          <strong>1</strong>
-          <button disabled>›</button>
-        </div>
-      </div>
-    </div>
-  );
+  return 'badge gray';
 }
 
 export default async function DashboardOverview() {
   const supabase = await createSupabaseServerClient();
 
-  const [vehiclesRes, driversRes, investorsRes] = await Promise.all([
-    supabase.from('vehicles').select('id, plate, model, brand, status'),
-    supabase.from('drivers').select('id, name, status'),
-    supabase.from('investors').select('id, name, status'),
+  const [
+    vehiclesRes,
+    driversRes,
+    investorsRes,
+    contractsRes,
+    finesRes,
+    inspectionsRes,
+  ] = await Promise.all([
+    supabase.from('vehicles').select('*'),
+    supabase.from('drivers').select('*'),
+    supabase.from('investors').select('*'),
+    supabase.from('contracts').select('*'),
+    supabase.from('fines').select('*'),
+    supabase.from('inspections').select('*'),
   ]);
 
-  const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
-  const drivers = (driversRes.data ?? []) as Person[];
-  const investors = (investorsRes.data ?? []) as Person[];
+  const vehicles = vehiclesRes.data || [];
+  const drivers = driversRes.data || [];
+  const investors = investorsRes.data || [];
+  const contracts = contractsRes.data || [];
+  const fines = finesRes.data || [];
+  const inspections = inspectionsRes.data || [];
 
-  const alugados = vehicles.filter((v) => {
-    const s = normalizar(v.status);
-    return s.includes('rented') || s.includes('alug');
-  }).length;
-
-  const disponiveis = vehicles.filter((v) => {
-    const s = normalizar(v.status);
-    return s.includes('available') || s.includes('dispon');
-  }).length;
-
-  const manutencao = vehicles.filter((v) => {
-    const s = normalizar(v.status);
-    return s.includes('maintenance') || s.includes('manut');
-  }).length;
-
-  const vendaAluguel = vehicles.filter((v) => {
-    const s = normalizar(v.status);
-    return s.includes('sold') || s.includes('sale') || s.includes('vend');
-  }).length;
+  const alugados = contarPorStatus(vehicles, 'alugado');
+  const disponiveis =
+    contarPorStatus(vehicles, 'disponivel') + contarPorStatus(vehicles, 'disponível');
+  const vendidos = contarPorStatus(vehicles, 'vendido');
+  const manutencao =
+    contarPorStatus(vehicles, 'manutencao') +
+    contarPorStatus(vehicles, 'manutenção') +
+    contarPorStatus(vehicles, 'em manutenção');
 
   return (
-    <section className="painel-operacional">
-      <h2>Painel operacional</h2>
-
-      <div className="grid-indicadores">
-        <Card titulo="Total de veículos" valor={vehicles.length} />
-        <Card titulo="Veículos alugados" valor={alugados} />
-        <Card titulo="Veículos venda por forma de aluguel" valor={vendaAluguel} />
-        <Card titulo="Veículos disponíveis" valor={disponiveis} />
-        <Card titulo="Veículos em manutenção" valor={manutencao} />
-        <Card titulo="Motoristas" valor={drivers.length} />
-        <Card titulo="Sócios" valor={investors.length} />
+    <div className="dashboard">
+      <div className="header">
+        <h1>Painel Operacional</h1>
+        <p>Visão geral da operação em tempo real</p>
       </div>
 
-      <div className="divisor" />
+      <section className="topCards">
+        <div className="bigCard blueLight">
+          <div className="icon">🚘</div>
+          <div>
+            <span>Veículos Alugados</span>
+            <strong>{alugados}</strong>
+            <small>Total alugados</small>
+          </div>
+        </div>
 
-      <div className="grid-listas">
-        <ListaVeiculos vehicles={vehicles} />
-        <ListaPessoas titulo="Sócios" pessoas={investors} />
-        <ListaPessoas titulo="Motoristas" pessoas={drivers} />
-      </div>
+        <div className="bigCard greenLight">
+          <div className="icon">✅</div>
+          <div>
+            <span>Disponíveis</span>
+            <strong>{disponiveis}</strong>
+            <small>Prontos para locação</small>
+          </div>
+        </div>
+
+        <div className="bigCard purpleLight">
+          <div className="icon">🏷️</div>
+          <div>
+            <span>Vendidos</span>
+            <strong>{vendidos}</strong>
+            <small>Total vendidos</small>
+          </div>
+        </div>
+
+        <div className="bigCard orangeLight">
+          <div className="icon">🔧</div>
+          <div>
+            <span>Em Manutenção</span>
+            <strong>{manutencao}</strong>
+            <small>Em manutenção</small>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Painel operacional</h2>
+
+        <div className="cardsGrid">
+          <div className="smallCard">
+            <span>Veículos</span>
+            <strong>{vehicles.length}</strong>
+            <small>Total</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Motoristas</span>
+            <strong>{drivers.length}</strong>
+            <small>Total</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Contratos</span>
+            <strong>{contracts.length}</strong>
+            <small>Ativos</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Multas</span>
+            <strong>{fines.length}</strong>
+            <small>Pendentes</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Vistorias</span>
+            <strong>{inspections.length}</strong>
+            <small>Pendentes</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Sócios</span>
+            <strong>{investors.length}</strong>
+            <small>Total</small>
+          </div>
+        </div>
+      </section>
+
+      <section className="tablePanel">
+        <div className="tableTitle">
+          <div>
+            <h2>🚘 Veículos</h2>
+            <p>Lista de veículos cadastrados</p>
+          </div>
+        </div>
+
+        <div className="tableBox">
+          <table>
+            <thead>
+              <tr>
+                <th>Veículo</th>
+                <th>Status do veículo</th>
+                <th>Motorista</th>
+                <th>Status motorista</th>
+                <th>Sócio</th>
+                <th>Status sócio</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {vehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="empty">
+                    Nenhum veículo cadastrado.
+                  </td>
+                </tr>
+              ) : (
+                vehicles.map((vehicle: any) => {
+                  const driver = drivers.find(
+                    (d: any) =>
+                      String(d.id) === String(vehicle.driver_id) ||
+                      String(d.vehicle_id) === String(vehicle.id),
+                  );
+
+                  const investor = investors.find(
+                    (i: any) =>
+                      String(i.id) === String(vehicle.investor_id) ||
+                      String(i.vehicle_id) === String(vehicle.id),
+                  );
+
+                  const vehicleName =
+                    `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() ||
+                    vehicle.name ||
+                    'Veículo sem nome';
+
+                  const driverName =
+                    driver?.name ||
+                    driver?.full_name ||
+                    driver?.nome ||
+                    'Sem motorista';
+
+                  const investorName =
+                    investor?.name ||
+                    investor?.full_name ||
+                    investor?.nome ||
+                    'Sem sócio';
+
+                  return (
+                    <tr key={vehicle.id}>
+                      <td>
+                        <div className="vehicleCell">
+                          <div className="carIcon">🚗</div>
+                          <div>
+                            <strong>{vehicleName}</strong>
+                            <small>{vehicle.plate || 'Sem placa'}</small>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className={badgeClasse(vehicle.status)}>
+                          {textoStatus(vehicle.status)}
+                        </span>
+                      </td>
+
+                      <td>{driverName}</td>
+
+                      <td>
+                        <span className={badgeClasse(driver?.status || driver?.active)}>
+                          {driver
+                            ? driver?.status || (driver?.active ? 'Ativo' : 'Inativo')
+                            : 'Não vinculado'}
+                        </span>
+                      </td>
+
+                      <td>{investorName}</td>
+
+                      <td>
+                        <span className={badgeClasse(investor?.status || investor?.active)}>
+                          {investor
+                            ? investor?.status || (investor?.active ? 'Ativo' : 'Inativo')
+                            : 'Não vinculado'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <style>{`
-        .painel-operacional {
-          background: #ffffff;
-          border-radius: 18px;
-          border: 1px solid #e5e7eb;
-          padding: 22px;
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+        .dashboard {
           width: 100%;
+          padding: 28px 34px;
+          background: #eef3f8;
+          min-height: 100vh;
+          color: #06142f;
         }
 
-        .painel-operacional h2 {
-          margin: 0 0 22px;
-          font-size: 28px;
+        .header h1 {
+          font-size: 34px;
           font-weight: 800;
-          color: #020617;
-          letter-spacing: -0.03em;
+          margin: 0;
+          letter-spacing: -0.8px;
         }
 
-        .grid-indicadores {
+        .header p {
+          margin: 8px 0 26px;
+          font-size: 17px;
+          color: #667085;
+        }
+
+        .topCards {
           display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 20px;
+          margin-bottom: 26px;
         }
 
-        .card-indicador {
-          min-height: 92px;
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 16px;
-          padding: 18px;
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-        }
-
-        .card-indicador span {
-          display: block;
-          font-size: 13px;
-          font-weight: 700;
-          color: #64748b;
-          margin-bottom: 12px;
-          line-height: 1.35;
-        }
-
-        .card-indicador strong {
-          display: block;
-          font-size: 30px;
-          font-weight: 900;
-          line-height: 1;
-          color: #020617;
-        }
-
-        .divisor {
-          height: 1px;
-          background: #e5e7eb;
-          margin: 22px 0;
-        }
-
-        .grid-listas {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 16px;
-        }
-
-        .lista-card {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 16px;
-          padding: 16px;
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-          min-height: 250px;
-        }
-
-        .lista-card h3 {
-          margin: 0 0 14px;
-          font-size: 20px;
-          font-weight: 800;
-          color: #020617;
-        }
-
-        .lista-cabecalho {
-          display: grid;
-          grid-template-columns: 1fr 120px;
-          gap: 12px;
-          padding: 10px 0;
-          border-bottom: 1px solid #e5e7eb;
-          color: #64748b;
-          font-size: 13px;
-          font-weight: 800;
-        }
-
-        .lista-corpo {
-          min-height: 120px;
-        }
-
-        .lista-linha {
-          display: grid;
-          grid-template-columns: 1fr 120px;
-          gap: 12px;
-          align-items: center;
-          padding: 13px 0;
-          font-size: 14px;
-          color: #020617;
-        }
-
-        .status {
+        .bigCard {
+          background: #fff;
+          border-radius: 22px;
+          padding: 24px;
           display: flex;
           align-items: center;
-          gap: 7px;
-          white-space: nowrap;
+          gap: 20px;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+          border: 1px solid #e6edf5;
         }
 
-        .status i {
-          width: 8px;
-          height: 8px;
-          border-radius: 999px;
-          display: inline-block;
+        .icon {
+          width: 76px;
+          height: 76px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 34px;
         }
 
-        .vazio {
-          margin: 18px 0;
-          color: #64748b;
+        .blueLight .icon { background: #e8f0ff; }
+        .greenLight .icon { background: #e7f8ef; }
+        .purpleLight .icon { background: #f0e7ff; }
+        .orangeLight .icon { background: #fff0e5; }
+
+        .bigCard span,
+        .smallCard span {
+          display: block;
+          font-size: 15px;
+          font-weight: 700;
+          color: #344054;
+        }
+
+        .bigCard strong {
+          display: block;
+          font-size: 38px;
+          line-height: 1;
+          margin: 8px 0;
+          color: #071631;
+        }
+
+        .bigCard small,
+        .smallCard small {
+          color: #667085;
           font-size: 14px;
-          font-weight: 600;
         }
 
-        .lista-rodape {
-          border-top: 1px solid #e5e7eb;
-          padding-top: 12px;
+        .panel,
+        .tablePanel {
+          background: #fff;
+          border-radius: 22px;
+          padding: 24px;
+          margin-bottom: 26px;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+          border: 1px solid #e6edf5;
+        }
+
+        .panel h2,
+        .tablePanel h2 {
+          margin: 0 0 20px;
+          font-size: 25px;
+          font-weight: 800;
+          letter-spacing: -0.4px;
+        }
+
+        .cardsGrid {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .smallCard {
+          background: #fff;
+          border-radius: 18px;
+          padding: 20px 22px;
+          border: 1px solid #e6edf5;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+        }
+
+        .smallCard strong {
+          display: block;
+          font-size: 32px;
+          margin: 8px 0;
+          color: #071631;
+        }
+
+        .tableTitle {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          color: #64748b;
-          font-size: 13px;
+          margin-bottom: 16px;
         }
 
-        .lista-rodape div {
+        .tableTitle p {
+          margin: -10px 0 0;
+          color: #667085;
+          font-size: 15px;
+        }
+
+        .tableBox {
+          overflow-x: auto;
+          border: 1px solid #e6edf5;
+          border-radius: 18px;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          background: #fff;
+        }
+
+        thead {
+          background: #f8fafc;
+        }
+
+        th {
+          text-align: left;
+          padding: 17px 20px;
+          font-size: 13px;
+          text-transform: uppercase;
+          color: #667085;
+          letter-spacing: 0.5px;
+          font-weight: 800;
+          border-bottom: 1px solid #e6edf5;
+        }
+
+        td {
+          padding: 18px 20px;
+          font-size: 15px;
+          color: #344054;
+          border-bottom: 1px solid #eef2f6;
+        }
+
+        tr:last-child td {
+          border-bottom: none;
+        }
+
+        .vehicleCell {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 14px;
         }
 
-        .lista-rodape button {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          border: 1px solid #e5e7eb;
-          background: #f8fafc;
-          color: #cbd5e1;
+        .vehicleCell strong {
+          display: block;
+          font-size: 16px;
+          color: #06142f;
         }
 
-        .lista-rodape strong {
-          width: 28px;
-          height: 32px;
-          display: grid;
-          place-items: center;
-          background: #020617;
-          color: white;
-          border-radius: 8px;
+        .vehicleCell small {
+          color: #667085;
+          font-size: 14px;
         }
 
-        @media (max-width: 1300px) {
-          .grid-indicadores {
+        .carIcon {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 23px;
+        }
+
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 92px;
+          padding: 8px 13px;
+          border-radius: 999px;
+          font-size: 14px;
+          font-weight: 700;
+        }
+
+        .green {
+          background: #dcfce7;
+          color: #15803d;
+        }
+
+        .blue {
+          background: #dbeafe;
+          color: #1d4ed8;
+        }
+
+        .purple {
+          background: #ede9fe;
+          color: #6d28d9;
+        }
+
+        .orange {
+          background: #ffedd5;
+          color: #c2410c;
+        }
+
+        .gray {
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        .empty {
+          text-align: center;
+          padding: 32px;
+          color: #667085;
+        }
+
+        @media (max-width: 1200px) {
+          .topCards {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .cardsGrid {
             grid-template-columns: repeat(3, minmax(0, 1fr));
           }
         }
 
-        @media (max-width: 900px) {
-          .grid-indicadores,
-          .grid-listas {
+        @media (max-width: 768px) {
+          .dashboard {
+            padding: 20px;
+          }
+
+          .topCards,
+          .cardsGrid {
             grid-template-columns: 1fr;
           }
         }
       `}</style>
-    </section>
+    </div>
   );
 }
