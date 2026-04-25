@@ -1,3 +1,4 @@
+
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 function normalizarStatus(valor: any) {
@@ -52,39 +53,103 @@ export async function DashboardOverview() {
   const inspections = inspectionsRes.data || [];
 
   const alugados = contarPorStatus(vehicles, 'alugado');
-  const disponiveis = contarPorStatus(vehicles, 'disponivel') + contarPorStatus(vehicles, 'disponível');
+  const disponiveis =
+    contarPorStatus(vehicles, 'disponivel') +
+    contarPorStatus(vehicles, 'disponível');
+
   const vendidos = contarPorStatus(vehicles, 'vendido');
+
   const manutencao =
     contarPorStatus(vehicles, 'manutencao') +
     contarPorStatus(vehicles, 'manutenção') +
     contarPorStatus(vehicles, 'em manutenção');
 
   return (
-    <div style={{ padding: 32, background: '#eef3f8', minHeight: '100vh', color: '#06142f' }}>
-      <h1 style={{ fontSize: 34, margin: 0 }}>Painel Operacional</h1>
-      <p style={{ color: '#667085', fontSize: 17 }}>Visão geral da operação em tempo real</p>
+    <div className="dashboard">
+      <h1>Painel Operacional</h1>
+      <p className="subtitle">Visão geral da operação em tempo real</p>
 
       <div className="topCards">
-        <div className="bigCard"><div className="icon blue">🚘</div><div><b>Veículos Alugados</b><strong>{alugados}</strong><small>Total alugados</small></div></div>
-        <div className="bigCard"><div className="icon green">✅</div><div><b>Disponíveis</b><strong>{disponiveis}</strong><small>Prontos para locação</small></div></div>
-        <div className="bigCard"><div className="icon purple">🏷️</div><div><b>Vendidos</b><strong>{vendidos}</strong><small>Total vendidos</small></div></div>
-        <div className="bigCard"><div className="icon orange">🔧</div><div><b>Em Manutenção</b><strong>{manutencao}</strong><small>Em manutenção</small></div></div>
+        <div className="bigCard">
+          <div className="icon blueIcon">🚘</div>
+          <div>
+            <b>Veículos Alugados</b>
+            <strong>{alugados}</strong>
+            <small>Total alugados</small>
+          </div>
+        </div>
+
+        <div className="bigCard">
+          <div className="icon greenIcon">✅</div>
+          <div>
+            <b>Disponíveis</b>
+            <strong>{disponiveis}</strong>
+            <small>Prontos para locação</small>
+          </div>
+        </div>
+
+        <div className="bigCard">
+          <div className="icon purpleIcon">🏷️</div>
+          <div>
+            <b>Vendidos</b>
+            <strong>{vendidos}</strong>
+            <small>Total vendidos</small>
+          </div>
+        </div>
+
+        <div className="bigCard">
+          <div className="icon orangeIcon">🔧</div>
+          <div>
+            <b>Em Manutenção</b>
+            <strong>{manutencao}</strong>
+            <small>Em manutenção</small>
+          </div>
+        </div>
       </div>
 
       <section className="panel">
         <div className="cardsGrid">
-          <div className="smallCard"><span>Veículos</span><strong>{vehicles.length}</strong><small>Total</small></div>
-          <div className="smallCard"><span>Motoristas</span><strong>{drivers.length}</strong><small>Total</small></div>
-          <div className="smallCard"><span>Contratos</span><strong>{contracts.length}</strong><small>Ativos</small></div>
-          <div className="smallCard"><span>Multas</span><strong>{fines.length}</strong><small>Pendentes</small></div>
-          <div className="smallCard"><span>Vistorias</span><strong>{inspections.length}</strong><small>Pendentes</small></div>
-          <div className="smallCard"><span>Sócios</span><strong>{investors.length}</strong><small>Total</small></div>
+          <div className="smallCard">
+            <span>Veículos</span>
+            <strong>{vehicles.length}</strong>
+            <small>Total</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Motoristas</span>
+            <strong>{drivers.length}</strong>
+            <small>Total</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Contratos</span>
+            <strong>{contracts.length}</strong>
+            <small>Ativos</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Multas</span>
+            <strong>{fines.length}</strong>
+            <small>Pendentes</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Vistorias</span>
+            <strong>{inspections.length}</strong>
+            <small>Pendentes</small>
+          </div>
+
+          <div className="smallCard">
+            <span>Sócios</span>
+            <strong>{investors.length}</strong>
+            <small>Total</small>
+          </div>
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel tablePanel">
         <h2>🚘 Veículos</h2>
-        <p style={{ color: '#667085' }}>Lista de veículos cadastrados</p>
+        <p className="subtitle small">Lista de veículos cadastrados</p>
 
         <div className="tableBox">
           <table>
@@ -100,135 +165,264 @@ export async function DashboardOverview() {
             </thead>
 
             <tbody>
-              {vehicles.map((vehicle: any) => {
-                const driver = drivers.find((d: any) => String(d.id) === String(vehicle.driver_id));
-                const investor = investors.find((i: any) => String(i.id) === String(vehicle.investor_id));
+              {vehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="empty">
+                    Nenhum veículo cadastrado.
+                  </td>
+                </tr>
+              ) : (
+                vehicles.map((vehicle: any) => {
+                  const driver = drivers.find(
+                    (d: any) => String(d.id) === String(vehicle.driver_id),
+                  );
 
-                return (
-                  <tr key={vehicle.id}>
-                    <td>
-                      <b>{`${vehicle.brand || ''} ${vehicle.model || ''}`.trim() || 'Veículo sem nome'}</b>
-                      <br />
-                      <small>{vehicle.plate || 'Sem placa'}</small>
-                    </td>
-                    <td><span className={badgeClasse(vehicle.status)}>{textoStatus(vehicle.status)}</span></td>
-                    <td>{driver?.name || driver?.nome || 'Sem motorista'}</td>
-                    <td><span className={badgeClasse(driver?.active)}>{driver ? (driver?.active ? 'Ativo' : 'Inativo') : 'Não vinculado'}</span></td>
-                    <td>{investor?.name || investor?.nome || 'Sem sócio'}</td>
-                    <td><span className={badgeClasse(investor?.active)}>{investor ? (investor?.active ? 'Ativo' : 'Inativo') : 'Não vinculado'}</span></td>
-                  </tr>
-                );
-              })}
+                  const investor = investors.find(
+                    (i: any) => String(i.id) === String(vehicle.investor_id),
+                  );
+
+                  const vehicleName =
+                    `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() ||
+                    vehicle.name ||
+                    'Veículo sem nome';
+
+                  return (
+                    <tr key={vehicle.id}>
+                      <td>
+                        <b>{vehicleName}</b>
+                        <br />
+                        <small>{vehicle.plate || 'Sem placa'}</small>
+                      </td>
+
+                      <td>
+                        <span className={badgeClasse(vehicle.status)}>
+                          {textoStatus(vehicle.status)}
+                        </span>
+                      </td>
+
+                      <td>{driver?.name || driver?.nome || 'Sem motorista'}</td>
+
+                      <td>
+                        <span className={badgeClasse(driver?.active)}>
+                          {driver
+                            ? driver?.active
+                              ? 'Ativo'
+                              : 'Inativo'
+                            : 'Não vinculado'}
+                        </span>
+                      </td>
+
+                      <td>{investor?.name || investor?.nome || 'Sem sócio'}</td>
+
+                      <td>
+                        <span className={badgeClasse(investor?.active)}>
+                          {investor
+                            ? investor?.active
+                              ? 'Ativo'
+                              : 'Inativo'
+                            : 'Não vinculado'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
       <style>{`
+        .dashboard {
+          padding: 18px 28px;
+          background: #eef3f8;
+          min-height: 100vh;
+          color: #06142f;
+        }
+
+        h1 {
+          font-size: 28px;
+          line-height: 1.1;
+          margin: 0 0 6px;
+          font-weight: 800;
+        }
+
+        .subtitle {
+          color: #667085;
+          font-size: 15px;
+          margin: 0 0 18px;
+        }
+
+        .subtitle.small {
+          font-size: 13px;
+          margin-bottom: 12px;
+        }
+
         .topCards {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 20px;
-          margin: 25px 0;
-        }
-
-        .bigCard, .panel {
-          background: white;
-          border-radius: 22px;
-          padding: 24px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-          border: 1px solid #e6edf5;
+          gap: 14px;
+          margin-bottom: 18px;
         }
 
         .bigCard {
+          background: white;
+          border-radius: 18px;
+          padding: 16px 18px;
           display: flex;
-          gap: 18px;
           align-items: center;
+          gap: 14px;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+          border: 1px solid #e6edf5;
+          min-height: 118px;
+        }
+
+        .bigCard b {
+          font-size: 14px;
+          display: block;
+          line-height: 1.15;
         }
 
         .bigCard strong {
           display: block;
-          font-size: 38px;
+          font-size: 30px;
+          line-height: 1;
           margin: 6px 0;
         }
 
-        .bigCard small, .smallCard small {
+        .bigCard small,
+        .smallCard small {
           color: #667085;
+          font-size: 13px;
         }
 
         .icon {
-          width: 74px;
-          height: 74px;
+          width: 58px;
+          height: 58px;
+          min-width: 58px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 32px;
+          font-size: 25px;
         }
 
-        .icon.blue { background: #e8f0ff; }
-        .icon.green { background: #e7f8ef; }
-        .icon.purple { background: #f0e7ff; }
-        .icon.orange { background: #fff0e5; }
+        .blueIcon { background: #e8f0ff; }
+        .greenIcon { background: #e7f8ef; }
+        .purpleIcon { background: #f0e7ff; }
+        .orangeIcon { background: #fff0e5; }
+
+        .panel {
+          background: white;
+          border-radius: 18px;
+          padding: 18px;
+          margin-bottom: 18px;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+          border: 1px solid #e6edf5;
+        }
 
         .cardsGrid {
           display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 18px;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 12px;
         }
 
         .smallCard {
           border: 1px solid #e6edf5;
-          border-radius: 18px;
-          padding: 20px;
+          border-radius: 15px;
+          padding: 14px 16px;
           background: white;
+          min-height: 98px;
+        }
+
+        .smallCard span {
+          font-size: 14px;
         }
 
         .smallCard strong {
           display: block;
-          font-size: 32px;
+          font-size: 28px;
+          line-height: 1;
           margin: 8px 0;
+        }
+
+        .tablePanel h2 {
+          font-size: 21px;
+          margin: 0 0 4px;
         }
 
         .tableBox {
           overflow-x: auto;
           border: 1px solid #e6edf5;
-          border-radius: 18px;
+          border-radius: 15px;
         }
 
         table {
           width: 100%;
           border-collapse: collapse;
+          background: white;
         }
 
         th {
           background: #f8fafc;
           text-align: left;
-          padding: 16px;
+          padding: 12px 14px;
           color: #667085;
-          font-size: 13px;
+          font-size: 12px;
           text-transform: uppercase;
+          font-weight: 800;
+          white-space: nowrap;
         }
 
         td {
-          padding: 18px 16px;
+          padding: 12px 14px;
           border-top: 1px solid #eef2f6;
           color: #344054;
+          font-size: 14px;
+          white-space: nowrap;
+        }
+
+        td b {
+          color: #06142f;
+          font-size: 14px;
+        }
+
+        td small {
+          color: #667085;
+          font-size: 12px;
         }
 
         .badge {
           display: inline-flex;
-          padding: 8px 14px;
+          padding: 6px 11px;
           border-radius: 999px;
           font-weight: 700;
-          font-size: 14px;
+          font-size: 12px;
+          min-width: 78px;
+          justify-content: center;
         }
 
-        .badge.green { background: #dcfce7; color: #15803d; }
-        .badge.blue { background: #dbeafe; color: #1d4ed8; }
-        .badge.purple { background: #ede9fe; color: #6d28d9; }
-        .badge.orange { background: #ffedd5; color: #c2410c; }
-        .badge.gray { background: #f1f5f9; color: #475569; }
+        .green { background: #dcfce7; color: #15803d; }
+        .blue { background: #dbeafe; color: #1d4ed8; }
+        .purple { background: #ede9fe; color: #6d28d9; }
+        .orange { background: #ffedd5; color: #c2410c; }
+        .gray { background: #f1f5f9; color: #475569; }
+
+        .empty {
+          text-align: center;
+          color: #667085;
+          padding: 22px;
+        }
+
+        @media (max-width: 1300px) {
+          .topCards {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .cardsGrid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
       `}</style>
     </div>
   );
