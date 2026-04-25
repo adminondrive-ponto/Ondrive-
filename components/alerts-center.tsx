@@ -173,44 +173,48 @@ export async function AlertsCenter() {
   const templates = [
     {
       title: 'CNH chegando no vencimento',
-      text: 'Aviso: a CNH está chegando no vencimento.',
+      text: 'Aviso: sua CNH está chegando no vencimento. Por favor, regularize antes da data limite.',
       level: 'warning',
     },
     {
       title: 'Multa chegando no vencimento',
-      text: 'Aviso: existe uma multa chegando no vencimento.',
+      text: 'Aviso: existe uma multa chegando no vencimento. Por favor, verifique o pagamento.',
       level: 'warning',
     },
     {
       title: 'Dia do pagamento chegando',
-      text: 'Aviso: o dia do pagamento do aluguel está chegando.',
+      text: 'Aviso: o dia do pagamento do aluguel está chegando. Por favor, se programe para evitar atraso.',
       level: 'warning',
     },
     {
       title: 'CNH vencida',
-      text: 'Vencido: a CNH está vencida.',
+      text: 'Vencido: sua CNH está vencida. Regularize o quanto antes.',
       level: 'danger',
     },
     {
       title: 'Pagamento vencido',
-      text: 'Vencido: o pagamento do aluguel está atrasado.',
+      text: 'Vencido: o pagamento do aluguel está atrasado. Regularize o quanto antes.',
       level: 'danger',
     },
   ];
 
   return (
     <div className="alertsPage">
-      <h1>Alertas</h1>
-
       <section className="panel">
         <h2>Mensagens prontas</h2>
 
         <div className="templateGrid">
           {templates.map((item) => (
-            <div key={item.title} className={`templateCard ${item.level}`}>
+            <button
+              key={item.title}
+              type="button"
+              className={`templateCard ${item.level}`}
+              data-title={item.title}
+              data-message={item.text}
+            >
               <strong>{item.title}</strong>
               <span>{item.text}</span>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -259,62 +263,105 @@ export async function AlertsCenter() {
         <div className="formGrid">
           <label>
             Título
-            <input placeholder="Ex: Pagamento vencido" />
+            <input id="alertTitle" placeholder="Ex: Pagamento vencido" />
           </label>
 
           <label>
             Motorista
-            <select>
-              <option>Selecione o motorista</option>
+            <select id="driverSelect">
+              <option value="">Selecione o motorista</option>
               {drivers.map((driver) => (
-                <option key={driver.id}>{nomeMotorista(driver)}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Telefone
-            <select>
-              <option>Selecione o telefone</option>
-              {drivers.map((driver) => (
-                <option key={driver.id}>
-                  {nomeMotorista(driver)} - {telefoneMotorista(driver) || 'Sem telefone'}
+                <option
+                  key={driver.id}
+                  value={driver.id}
+                  data-phone={telefoneMotorista(driver)}
+                >
+                  {nomeMotorista(driver)}
                 </option>
               ))}
             </select>
           </label>
 
           <label>
-            Tipo
-            <select>
-              <option>Aviso amarelo</option>
-              <option>Vencido vermelho</option>
-            </select>
+            Telefone
+            <input id="driverPhone" placeholder="Telefone do motorista" readOnly />
           </label>
         </div>
 
         <label className="messageField">
           Mensagem
-          <textarea placeholder="Digite ou edite a mensagem do alerta" />
+          <textarea id="alertMessage" placeholder="Digite ou edite a mensagem do alerta" />
         </label>
 
         <div className="actions">
           <button type="button">Salvar alerta</button>
-          <button type="button" className="secondary">
-            Editar alerta
-          </button>
+          <a id="manualWhatsApp" href="#" target="_blank">
+            Abrir WhatsApp
+          </a>
         </div>
       </section>
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            function atualizarWhatsApp() {
+              const phone = document.getElementById('driverPhone')?.value || '';
+              const message = document.getElementById('alertMessage')?.value || '';
+              const link = document.getElementById('manualWhatsApp');
+
+              if (!link) return;
+
+              const cleanPhone = phone.replace(/\\D/g, '');
+
+              if (!cleanPhone) {
+                link.href = '#';
+                return;
+              }
+
+              link.href = 'https://wa.me/55' + cleanPhone + '?text=' + encodeURIComponent(message);
+            }
+
+            document.querySelectorAll('.templateCard').forEach(function(card) {
+              card.addEventListener('click', function() {
+                const title = card.getAttribute('data-title') || '';
+                const message = card.getAttribute('data-message') || '';
+
+                const titleInput = document.getElementById('alertTitle');
+                const messageInput = document.getElementById('alertMessage');
+
+                if (titleInput) titleInput.value = title;
+                if (messageInput) messageInput.value = message;
+
+                atualizarWhatsApp();
+              });
+            });
+
+            const driverSelect = document.getElementById('driverSelect');
+
+            if (driverSelect) {
+              driverSelect.addEventListener('change', function() {
+                const selected = driverSelect.options[driverSelect.selectedIndex];
+                const phone = selected?.getAttribute('data-phone') || '';
+                const phoneInput = document.getElementById('driverPhone');
+
+                if (phoneInput) phoneInput.value = phone;
+
+                atualizarWhatsApp();
+              });
+            }
+
+            const messageInput = document.getElementById('alertMessage');
+
+            if (messageInput) {
+              messageInput.addEventListener('input', atualizarWhatsApp);
+            }
+          `,
+        }}
+      />
 
       <style>{`
         .alertsPage {
           color: #06142f;
-        }
-
-        h1 {
-          font-size: 28px;
-          margin: 0 0 18px;
-          font-weight: 800;
         }
 
         .panel {
@@ -342,6 +389,13 @@ export async function AlertsCenter() {
           border-radius: 13px;
           padding: 11px;
           background: white;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .templateCard:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
         }
 
         .templateCard strong {
@@ -418,7 +472,9 @@ export async function AlertsCenter() {
           color: #667085;
         }
 
-        .whatsButton {
+        .whatsButton,
+        .actions a,
+        .actions button {
           background: #22c55e;
           color: white;
           padding: 8px 12px;
@@ -427,6 +483,12 @@ export async function AlertsCenter() {
           font-weight: 700;
           text-decoration: none;
           white-space: nowrap;
+          border: 0;
+          cursor: pointer;
+        }
+
+        .actions button {
+          background: #2563eb;
         }
 
         .noPhone {
@@ -440,7 +502,7 @@ export async function AlertsCenter() {
 
         .formGrid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 10px;
         }
 
@@ -478,22 +540,6 @@ export async function AlertsCenter() {
           display: flex;
           gap: 10px;
           margin-top: 10px;
-        }
-
-        .actions button {
-          border: 0;
-          background: #2563eb;
-          color: white;
-          padding: 8px 12px;
-          border-radius: 10px;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .actions .secondary {
-          background: #f1f5f9;
-          color: #06142f;
         }
 
         .empty {
