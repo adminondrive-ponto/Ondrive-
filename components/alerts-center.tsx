@@ -19,12 +19,17 @@ type Fine = {
   status?: string;
 };
 
-type AutoAlert = {
-  tipo: string;
-  nivel: 'warning' | 'danger';
-  texto: string;
-  driver?: Driver;
-  driverId?: string;
+type AlertRow = {
+  id: string;
+  alert_key?: string | null;
+  source?: string | null;
+  level?: 'warning' | 'danger' | null;
+  alert_type?: string | null;
+  title: string;
+  message: string;
+  driver_id?: string | null;
+  phone?: string | null;
+  status?: string | null;
 };
 
 export function AlertsCenter() {
@@ -33,99 +38,153 @@ export function AlertsCenter() {
   const [phone, setPhone] = useState('');
   const [driverId, setDriverId] = useState('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [autoAlerts, setAutoAlerts] = useState<AutoAlert[]>([]);
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
   );
 
-  useEffect(() => {
-    async function carregarDados() {
-      const { data: driversData } = await supabase.from('drivers').select('*');
-      const { data: finesData } = await supabase.from('fines').select('*');
+  async function carregarDados() {
+    const { data: driversData } = await supabase.from('drivers').select('*');
+    const { data: finesData } = await supabase.from('fines').select('*');
+    const { data: existingAlertsData } = await supabase
+      .from('alerts')
+      .select('alert_key, status');
 
-      const driversList = (driversData || []) as Driver[];
-      const finesList = (finesData || []) as Fine[];
+    const driversList = (driversData || []) as Driver[];
+    const finesList = (finesData || []) as Fine[];
+    const existingAlerts = existingAlertsData || [];
 
-      setDrivers(driversList);
+    setDrivers(driversList);
 
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
+    const existingKeys = new Set(
+      existingAlerts.map((item) => String(item.alert_key)),
+    );
 
-      const alertas: AutoAlert[] = [];
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
 
-      driversList.forEach((driver) => {
-        if (!driver.cnh_due_date) return;
+    const newAutoAlerts: Partial<AlertRow>[] = [];
 
-        const vencimento = new Date(driver.cnh_due_date);
-        vencimento.setHours(0, 0, 0, 0);
+    driversList.forEach((driver) => {
+      if (!driver.cnh_due_date) return;
 
-        const diffDias = Math.ceil(
-          (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
-        );
+      const vencimento = new Date(driver.cnh_due_date);
+      vencimento.setHours(0, 0, 0, 0);
 
-        const nome = driver.name || driver.nome || 'Motorista';
+      const diffDias = Math.ceil(
+        (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
 
-        if (diffDias >= 0 && diffDias <= 3) {
-          alertas.push({
-            tipo: 'CNH chegando no vencimento',
-            nivel: 'warning',
-            texto: `Aviso: a CNH de ${nome} vence em ${diffDias} dia(s). Regularize antes da data limite.`,
-            driver,
+      const nome = driver.name || driver.nome || 'Motorista';
+      const telefone = driver.phone || driver.telefone || null;
+
+      if (diffDias >= 0 && diffDias <= 3) {
+        const alertKey = `cnh-warning-${driver.id}-${driver.cnh_due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'warning',
+            alert_type: 'CNH chegando no vencimento',
+            title: 'CNH chegando no vencimento',
+            message: `Aviso: a CNH de ${nome} vence em ${diffDias} dia(s). Regularize antes da data limite.`,
+            driver_id: driver.id,
+            phone: telefone,
+            status: 'active',
           });
         }
+      }
 
-        if (diffDias < 0) {
-          alertas.push({
-            tipo: 'CNH vencida',
-            nivel: 'danger',
-            texto: `Vencido: a CNH de ${nome} está vencida. Regularize o quanto antes.`,
-            driver,
+      if (diffDias < 0) {
+        const alertKey = `cnh-danger-${driver.id}-${driver.cnh_due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'danger',
+            alert_type: 'CNH vencida',
+            title: 'CNH vencida',
+            message: `Vencido: a CNH de ${nome} está vencida. Regularize o quanto antes.`,
+            driver_id: driver.id,
+            phone: telefone,
+            status: 'active',
           });
         }
-      });
+      }
+    });
 
-      finesList.forEach((fine) => {
-        if (!fine.due_date || fine.status === 'paid') return;
+    finesList.forEach((fine) => {
+      if (!fine.due_date || fine.status === 'paid') return;
 
-        const vencimento = new Date(fine.due_date);
-        vencimento.setHours(0, 0, 0, 0);
+      const vencimento = new Date(fine.due_date);
+      vencimento.setHours(0, 0, 0, 0);
 
-        const diffDias = Math.ceil(
-          (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
-        );
+      const diffDias = Math.ceil(
+        (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+      );
 
-        const driver = driversList.find(
-          (item) => String(item.id) === String(fine.driver_id),
-        );
+      const driver = driversList.find(
+        (item) => String(item.id) === String(fine.driver_id),
+      );
 
-        const nome = driver?.name || driver?.nome || 'motorista';
+      const nome = driver?.name || driver?.nome || 'motorista';
+      const telefone = driver?.phone || driver?.telefone || null;
 
-        if (diffDias >= 0 && diffDias <= 3) {
-          alertas.push({
-            tipo: 'Multa chegando no vencimento',
-            nivel: 'warning',
-            texto: `Aviso: existe uma multa de ${nome} vencendo em ${diffDias} dia(s). Verifique o pagamento.`,
-            driver,
-            driverId: fine.driver_id,
+      if (diffDias >= 0 && diffDias <= 3) {
+        const alertKey = `fine-warning-${fine.id}-${fine.due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'warning',
+            alert_type: 'Multa chegando no vencimento',
+            title: 'Multa chegando no vencimento',
+            message: `Aviso: existe uma multa de ${nome} vencendo em ${diffDias} dia(s). Verifique o pagamento.`,
+            driver_id: fine.driver_id || null,
+            phone: telefone,
+            status: 'active',
           });
         }
+      }
 
-        if (diffDias < 0) {
-          alertas.push({
-            tipo: 'Multa vencida',
-            nivel: 'danger',
-            texto: `Vencido: existe uma multa de ${nome} atrasada. Regularize o quanto antes.`,
-            driver,
-            driverId: fine.driver_id,
+      if (diffDias < 0) {
+        const alertKey = `fine-danger-${fine.id}-${fine.due_date}`;
+
+        if (!existingKeys.has(alertKey)) {
+          newAutoAlerts.push({
+            alert_key: alertKey,
+            source: 'auto',
+            level: 'danger',
+            alert_type: 'Multa vencida',
+            title: 'Multa vencida',
+            message: `Vencido: existe uma multa de ${nome} atrasada. Regularize o quanto antes.`,
+            driver_id: fine.driver_id || null,
+            phone: telefone,
+            status: 'active',
           });
         }
-      });
+      }
+    });
 
-      setAutoAlerts(alertas);
+    if (newAutoAlerts.length > 0) {
+      await supabase.from('alerts').insert(newAutoAlerts);
     }
 
+    const { data: activeAlertsData } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+
+    setAlerts((activeAlertsData || []) as AlertRow[]);
+  }
+
+  useEffect(() => {
     carregarDados();
   }, []);
 
@@ -171,11 +230,64 @@ export function AlertsCenter() {
     }
   }
 
+  async function salvarAlerta() {
+    if (!title.trim()) {
+      window.alert('Preencha o título do alerta.');
+      return;
+    }
+
+    if (!message.trim()) {
+      window.alert('Preencha a mensagem do alerta.');
+      return;
+    }
+
+    const { error } = await supabase.from('alerts').insert({
+      alert_key: `manual-${Date.now()}`,
+      source: 'manual',
+      level: 'warning',
+      alert_type: title,
+      title,
+      message,
+      driver_id: driverId || null,
+      phone: phone || null,
+      status: 'active',
+    });
+
+    if (error) {
+      window.alert(`Erro ao salvar alerta: ${error.message}`);
+      return;
+    }
+
+    setTitle('');
+    setMessage('');
+    setPhone('');
+    setDriverId('');
+
+    await carregarDados();
+  }
+
+  async function concluirAlerta(alerta: AlertRow) {
+    const { error } = await supabase
+      .from('alerts')
+      .update({
+        status: 'done',
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', alerta.id);
+
+    if (error) {
+      window.alert(`Erro ao concluir alerta: ${error.message}`);
+      return;
+    }
+
+    setAlerts((prev) => prev.filter((item) => item.id !== alerta.id));
+  }
+
   function abrirWhatsApp() {
     const cleanPhone = phone.replace(/\D/g, '');
 
     if (!cleanPhone) {
-      alert('Digite um telefone antes de abrir o WhatsApp');
+      window.alert('Digite um telefone antes de abrir o WhatsApp');
       return;
     }
 
@@ -211,36 +323,44 @@ export function AlertsCenter() {
       <section className="panel">
         <h2>Alertas automáticos do sistema</h2>
 
-        {autoAlerts.length === 0 ? (
+        {alerts.length === 0 ? (
           <div className="empty">Nenhum alerta automático no momento.</div>
         ) : (
           <div className="templateGrid">
-            {autoAlerts.map((alert, index) => (
-              <div key={index} className={`templateCard ${alert.nivel}`}>
-                <strong>{alert.tipo}</strong>
-                <span>{alert.texto}</span>
+            {alerts.map((alerta) => (
+              <div
+                key={alerta.id}
+                className={`templateCard ${alerta.level || 'warning'}`}
+              >
+                <strong>{alerta.title}</strong>
+                <span>{alerta.message}</span>
 
-                <button
-                  type="button"
-                  style={{ marginTop: 8 }}
-                  onClick={() => {
-                    const driver =
-                      alert.driver ||
-                      drivers.find(
-                        (item) => String(item.id) === String(alert.driverId),
+                <div className="alertActions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const driver = drivers.find(
+                        (item) => String(item.id) === String(alerta.driver_id),
                       );
 
-                    if (driver) {
-                      setDriverId(driver.id);
-                      setPhone(driver.phone || driver.telefone || '');
-                    }
+                      if (driver) {
+                        setDriverId(driver.id);
+                        setPhone(driver.phone || driver.telefone || '');
+                      } else if (alerta.phone) {
+                        setPhone(alerta.phone);
+                      }
 
-                    setTitle(alert.tipo);
-                    setMessage(alert.texto);
-                  }}
-                >
-                  Enviar alerta
-                </button>
+                      setTitle(alerta.title);
+                      setMessage(alerta.message);
+                    }}
+                  >
+                    Enviar alerta
+                  </button>
+
+                  <button type="button" onClick={() => concluirAlerta(alerta)}>
+                    OK
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -295,7 +415,9 @@ export function AlertsCenter() {
         </label>
 
         <div className="actions">
-          <button type="button">Salvar alerta</button>
+          <button type="button" onClick={salvarAlerta}>
+            Salvar alerta
+          </button>
 
           <button type="button" onClick={abrirWhatsApp}>
             Abrir WhatsApp
@@ -364,6 +486,13 @@ export function AlertsCenter() {
           cursor: pointer;
           font-weight: 600;
           font-size: 12px;
+        }
+
+        .alertActions {
+          margin-top: 8px;
+          display: flex;
+          gap: 8px;
+          align-items: center;
         }
 
         .formGrid {

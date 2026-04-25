@@ -206,8 +206,8 @@ export const moduleConfigs = {
     fields: [
       { key: 'date', label: 'Data', type: 'date', required: true },
       { key: 'rent_value', label: 'Valor do aluguel', type: 'number' },
-      { key: 'adm_fee', label: 'Repasse do ADM', type: 'number' },
-      { key: 'repasse_value', label: 'Repasse do sócio', type: 'number' },
+     { key: 'adm_fee', label: '% Repasse ADM/Motorista', type: 'number' },
+{ key: 'repasse_value', label: '% Repasse do sócio', type: 'number' },
       { key: 'expense_value', label: 'Valor da despesa', type: 'number' },
       { key: 'description', label: 'Descrição da despesa', type: 'textarea' },
       {

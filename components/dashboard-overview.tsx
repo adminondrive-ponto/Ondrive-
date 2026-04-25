@@ -68,20 +68,20 @@ export async function DashboardOverview() {
     <div className="dashboard">
       <div className="topCards">
         <div className="bigCard">
-          <div className="icon blueIcon">🚘</div>
-          <div>
-            <b>Veículos alugados</b>
-            <strong>{alugados}</strong>
-            <small>Total alugados</small>
-          </div>
-        </div>
-
-        <div className="bigCard">
           <div className="icon greenIcon">✅</div>
           <div>
             <b>Disponíveis</b>
             <strong>{disponiveis}</strong>
             <small>Prontos para locação</small>
+          </div>
+        </div>
+
+        <div className="bigCard">
+          <div className="icon blueIcon">🚘</div>
+          <div>
+            <b>Veículos alugados</b>
+            <strong>{alugados}</strong>
+            <small>Total alugados</small>
           </div>
         </div>
 
@@ -119,6 +119,12 @@ export async function DashboardOverview() {
           </div>
 
           <div className="smallCard">
+            <span>Sócios</span>
+            <strong>{investors.length}</strong>
+            <small>Total</small>
+          </div>
+
+          <div className="smallCard">
             <span>Contratos</span>
             <strong>{contracts.length}</strong>
             <small>Ativos</small>
@@ -135,12 +141,6 @@ export async function DashboardOverview() {
             <strong>{inspections.length}</strong>
             <small>Pendentes</small>
           </div>
-
-          <div className="smallCard">
-            <span>Sócios</span>
-            <strong>{investors.length}</strong>
-            <small>Total</small>
-          </div>
         </div>
       </section>
 
@@ -154,32 +154,28 @@ export async function DashboardOverview() {
                 <th>Veículo</th>
                 <th>Status do veículo</th>
                 <th>Motorista</th>
-                <th>Status motorista</th>
+              
                 <th>Sócio</th>
-                <th>Status sócio</th>
+              
               </tr>
             </thead>
 
             <tbody>
               {vehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="empty">
+                  <td colSpan={4} className="empty">
                     Nenhum veículo cadastrado.
                   </td>
                 </tr>
               ) : (
                 vehicles.map((vehicle: any) => {
-                  const driver = drivers.find(
-                    (d: any) =>
-                      String(d.id) === String(vehicle.driver_id) ||
-                      String(d.vehicle_id) === String(vehicle.id),
-                  );
+               const driver = drivers.find(
+  (d: any) => String(d.id) === String(vehicle.driver_id)
+);
 
-                  const investor = investors.find(
-                    (i: any) =>
-                      String(i.id) === String(vehicle.investor_id) ||
-                      String(i.vehicle_id) === String(vehicle.id),
-                  );
+                const investor = investors.find(
+  (i: any) => String(i.id) === String(vehicle.investor_id)
+);
 
                   const vehicleName =
                     `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() ||
@@ -202,19 +198,11 @@ export async function DashboardOverview() {
 
                       <td>{driver?.name || driver?.nome || 'Sem motorista'}</td>
 
-                      <td>
-                        <span className={badgeClasse(driver?.active)}>
-                          {textoAtivo(driver?.active)}
-                        </span>
-                      </td>
+                    
 
                       <td>{investor?.name || investor?.nome || 'Sem sócio'}</td>
 
-                      <td>
-                        <span className={badgeClasse(investor?.active)}>
-                          {textoAtivo(investor?.active)}
-                        </span>
-                      </td>
+                     
                     </tr>
                   );
                 })
@@ -296,7 +284,7 @@ export async function DashboardOverview() {
 
         .cardsGrid {
           display: grid;
-          grid-template-columns: repeat(6, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 10px;
         }
 

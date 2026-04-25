@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import type { CrudModuleConfig, ModuleField, ModuleOption } from '@/lib/types';
@@ -145,6 +146,13 @@ function getDisplayValue(
   }
 
   if (
+    config.table === 'financial_entries' &&
+    (column === 'adm_fee' || column === 'repasse_value')
+  ) {
+    return `${Number(value)}%`;
+  }
+
+  if (
     typeof value === 'number' &&
     /amount|value|fee|rent|price|valor|repasse|expense/i.test(columnName)
   ) {
@@ -214,6 +222,7 @@ function applyFinancialRules(payload: PayloadData) {
 
 export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
   const supabase = getSupabaseBrowserClient() as any;
+  const router = useRouter();
   const initialForm = useMemo(() => buildInitialForm(config), [config]);
 
   const [rows, setRows] = useState<RowData[]>([]);
@@ -319,12 +328,36 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
     setForm(initialForm);
   }, [initialForm]);
 
-  function updateField(field: ModuleField, raw: unknown) {
-    setForm((prev) => ({
+function updateField(field: ModuleField, raw: unknown) {
+  setForm((prev) => {
+    const value = field.type === 'checkbox' ? Boolean(raw) : raw;
+
+    const next = {
       ...prev,
-      [field.key]: field.type === 'checkbox' ? Boolean(raw) : raw,
-    }));
-  }
+      [field.key]: value,
+    };
+
+    if (config.slug === 'financeiro') {
+      if (field.key === 'adm_fee') {
+        const admPercent = Number(value);
+
+        if (!Number.isNaN(admPercent) && admPercent >= 0 && admPercent <= 100) {
+          next.repasse_value = String(100 - admPercent);
+        }
+      }
+
+      if (field.key === 'repasse_value') {
+        const socioPercent = Number(value);
+
+        if (!Number.isNaN(socioPercent) && socioPercent >= 0 && socioPercent <= 100) {
+          next.adm_fee = String(100 - socioPercent);
+        }
+      }
+    }
+
+    return next;
+  });
+}
 
   function startEdit(row: RowData) {
     const next: FormState = {};
@@ -382,6 +415,17 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
     setSaving(true);
     setError(null);
     setSuccess(null);
+if (config.slug === 'financeiro') {
+  const admPercent = Number(form.adm_fee ?? 0);
+  const socioPercent = Number(form.repasse_value ?? 0);
+  const totalPercent = admPercent + socioPercent;
+
+  if (totalPercent !== 100) {
+    setSaving(false);
+    setError('A soma do % Repasse ADM/Motorista com o % Repasse do sócio precisa ser exatamente 100%.');
+    return;
+  }
+}
 
     try {
       const payload = buildPayload();
@@ -407,6 +451,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
       setDeletingId(null);
       resetForm();
       await loadRows();
+      router.refresh();
     } catch (err) {
       setError(getSupabaseErrorMessage(err, 'Erro ao salvar o registro.'));
     } finally {
@@ -437,6 +482,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
       setDeletingId(null);
       setSuccess('Registro excluído com sucesso.');
       await loadRows();
+      router.refresh();
     } catch (err) {
       setError(getSupabaseErrorMessage(err, 'Erro ao excluir o registro.'));
     } finally {
@@ -499,6 +545,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 
       setSuccess(`${parsedRows.length} registro(s) importado(s) com sucesso.`);
       await loadRows();
+      router.refresh();
     } catch (err) {
       setError(getSupabaseErrorMessage(err, 'Erro ao importar planilha.'));
     } finally {
@@ -576,7 +623,19 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
   }
 
   return (
-    <div className="grid-two">
+    <div
+      className="grid-two"
+      style={
+        config.slug === 'financeiro'
+          ? {
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+              gap: 20,
+              alignItems: 'start',
+            }
+          : undefined
+      }
+    >
       <section className="card">
         <div className="page-header" style={{ marginBottom: 16 }}>
           <div>
@@ -594,6 +653,13 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 
         {error ? <div className="alert">{error}</div> : null}
         {success ? <div className="alert success">{success}</div> : null}
+{config.slug === 'financeiro' &&
+ Number(form.rent_value ?? 0) > 0 &&
+ Number(form.expense_value ?? 0) > Number(form.rent_value ?? 0) ? (
+  <div className="alert" style={{ background: '#fee2e2', color: '#991b1b' }}>
+    ⚠️ Atenção: essa operação está com prejuízo (despesa maior que o aluguel)
+  </div>
+) : null}
 
         <form onSubmit={handleSubmit} className="form-grid">
           {config.fields.map((field) => (
