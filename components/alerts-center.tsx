@@ -10,16 +10,20 @@ type Driver = {
   phone?: string;
   telefone?: string;
   cnh_due_date?: string;
-  cnh_expiration?: string;
-  license_expiration?: string;
+};
+
+type Fine = {
+  id: string;
+  driver_id?: string;
+  due_date?: string;
+  status?: string;
 };
 
 type AutoAlert = {
-  id: string;
-  title: string;
-  message: string;
-  level: 'warning' | 'danger';
-  phone?: string;
+  tipo: string;
+  nivel: 'warning' | 'danger';
+  texto: string;
+  driver?: Driver;
   driverId?: string;
 };
 
@@ -29,168 +33,97 @@ export function AlertsCenter() {
   const [phone, setPhone] = useState('');
   const [driverId, setDriverId] = useState('');
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [automaticAlerts, setAutomaticAlerts] = useState<AutoAlert[]>([]);
+  const [autoAlerts, setAutoAlerts] = useState<AutoAlert[]>([]);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
   );
 
-  function diasAteVencimento(data: string) {
-    const hoje = new Date();
-    const vencimento = new Date(data);
-
-    hoje.setHours(0, 0, 0, 0);
-    vencimento.setHours(0, 0, 0, 0);
-
-    return Math.ceil(
-      (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
-    );
-  }
-
-  function formatarData(data: string) {
-    return new Date(data).toLocaleDateString('pt-BR', {
-      timeZone: 'UTC',
-    });
-  }
-
-  function criarAlerta(
-    id: string,
-    tituloBase: string,
-    dataVencimento: string,
-    motorista?: Driver,
-  ): AutoAlert | null {
-    const dias = diasAteVencimento(dataVencimento);
-
-    if (dias > 3) return null;
-
-    const vencido = dias < 0;
-    const hoje = dias === 0;
-
-    const nomeMotorista =
-      motorista?.name || motorista?.nome || 'motorista selecionado';
-
-    return {
-      id,
-      title: vencido
-        ? `${tituloBase} vencido`
-        : hoje
-          ? `${tituloBase} vence hoje`
-          : `${tituloBase} próximo do vencimento`,
-      message: vencido
-        ? `Vencido: ${tituloBase} de ${nomeMotorista} venceu em ${formatarData(
-            dataVencimento,
-          )}. Regularize o quanto antes.`
-        : `Aviso: ${tituloBase} de ${nomeMotorista} vence em ${formatarData(
-            dataVencimento,
-          )}. Faltam ${dias} dia(s).`,
-      level: vencido ? 'danger' : 'warning',
-      phone: motorista?.phone || motorista?.telefone || '',
-      driverId: motorista?.id,
-    };
-  }
-
   useEffect(() => {
     async function carregarDados() {
       const { data: driversData } = await supabase.from('drivers').select('*');
-      const listaMotoristas = (driversData || []) as Driver[];
+      const { data: finesData } = await supabase.from('fines').select('*');
 
-      setDrivers(listaMotoristas);
+      const driversList = (driversData || []) as Driver[];
+      const finesList = (finesData || []) as Fine[];
 
-      const novosAlertas: AutoAlert[] = [];
+      setDrivers(driversList);
 
-      listaMotoristas.forEach((driver) => {
-        const dataCnh =
-          driver.cnh_due_date ||
-          driver.cnh_expiration ||
-          driver.license_expiration;
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
 
-        if (!dataCnh) return;
+      const alertas: AutoAlert[] = [];
 
-        const alerta = criarAlerta(
-          `cnh-${driver.id}-${dataCnh}`,
-          'CNH',
-          dataCnh,
-          driver,
+      driversList.forEach((driver) => {
+        if (!driver.cnh_due_date) return;
+
+        const vencimento = new Date(driver.cnh_due_date);
+        vencimento.setHours(0, 0, 0, 0);
+
+        const diffDias = Math.ceil(
+          (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
         );
 
-        if (alerta) novosAlertas.push(alerta);
+        const nome = driver.name || driver.nome || 'Motorista';
+
+        if (diffDias >= 0 && diffDias <= 3) {
+          alertas.push({
+            tipo: 'CNH chegando no vencimento',
+            nivel: 'warning',
+            texto: `Aviso: a CNH de ${nome} vence em ${diffDias} dia(s). Regularize antes da data limite.`,
+            driver,
+          });
+        }
+
+        if (diffDias < 0) {
+          alertas.push({
+            tipo: 'CNH vencida',
+            nivel: 'danger',
+            texto: `Vencido: a CNH de ${nome} está vencida. Regularize o quanto antes.`,
+            driver,
+          });
+        }
       });
 
-      const { data: multas } = await supabase.from('fines').select('*');
+      finesList.forEach((fine) => {
+        if (!fine.due_date || fine.status === 'paid') return;
 
-      multas?.forEach((multa: any) => {
-        const dataVencimento =
-          multa.due_date || multa.payment_date || multa.date;
+        const vencimento = new Date(fine.due_date);
+        vencimento.setHours(0, 0, 0, 0);
 
-        if (!dataVencimento || multa.paid === true) return;
-
-        const motorista = listaMotoristas.find(
-          (driver) => String(driver.id) === String(multa.driver_id),
+        const diffDias = Math.ceil(
+          (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
         );
 
-        const alerta = criarAlerta(
-          `multa-${multa.id}-${dataVencimento}`,
-          'Multa',
-          dataVencimento,
-          motorista,
+        const driver = driversList.find(
+          (item) => String(item.id) === String(fine.driver_id),
         );
 
-        if (alerta) novosAlertas.push(alerta);
+        const nome = driver?.name || driver?.nome || 'motorista';
+
+        if (diffDias >= 0 && diffDias <= 3) {
+          alertas.push({
+            tipo: 'Multa chegando no vencimento',
+            nivel: 'warning',
+            texto: `Aviso: existe uma multa de ${nome} vencendo em ${diffDias} dia(s). Verifique o pagamento.`,
+            driver,
+            driverId: fine.driver_id,
+          });
+        }
+
+        if (diffDias < 0) {
+          alertas.push({
+            tipo: 'Multa vencida',
+            nivel: 'danger',
+            texto: `Vencido: existe uma multa de ${nome} atrasada. Regularize o quanto antes.`,
+            driver,
+            driverId: fine.driver_id,
+          });
+        }
       });
 
-      const { data: financeiro } = await supabase
-        .from('financial')
-        .select('*');
-
-      financeiro?.forEach((pagamento: any) => {
-        const dataVencimento =
-          pagamento.due_date || pagamento.payment_date || pagamento.date;
-
-        if (!dataVencimento || pagamento.paid === true) return;
-
-        const motorista = listaMotoristas.find(
-          (driver) => String(driver.id) === String(pagamento.driver_id),
-        );
-
-        const alerta = criarAlerta(
-          `pagamento-${pagamento.id}-${dataVencimento}`,
-          'Pagamento do aluguel',
-          dataVencimento,
-          motorista,
-        );
-
-        if (alerta) novosAlertas.push(alerta);
-      });
-
-      const { data: contratos } = await supabase
-        .from('contracts')
-        .select('*');
-
-      contratos?.forEach((contrato: any) => {
-        const dataVencimento =
-          contrato.due_date ||
-          contrato.payment_date ||
-          contrato.end_date ||
-          contrato.date;
-
-        if (!dataVencimento || contrato.paid === true) return;
-
-        const motorista = listaMotoristas.find(
-          (driver) => String(driver.id) === String(contrato.driver_id),
-        );
-
-        const alerta = criarAlerta(
-          `contrato-${contrato.id}-${dataVencimento}`,
-          'Contrato',
-          dataVencimento,
-          motorista,
-        );
-
-        if (alerta) novosAlertas.push(alerta);
-      });
-
-      setAutomaticAlerts(novosAlertas);
+      setAutoAlerts(alertas);
     }
 
     carregarDados();
@@ -222,7 +155,8 @@ export function AlertsCenter() {
     },
     {
       title: 'Pagamento vencido',
-      message: 'Vencido: o pagamento do aluguel está atrasado. Regularize o quanto antes.',
+      message:
+        'Vencido: o pagamento do aluguel está atrasado. Regularize o quanto antes.',
       level: 'danger',
     },
   ];
@@ -235,13 +169,6 @@ export function AlertsCenter() {
     if (driver) {
       setPhone(driver.phone || driver.telefone || '');
     }
-  }
-
-  function selecionarAlertaAutomatico(alerta: AutoAlert) {
-    setTitle(alerta.title);
-    setMessage(alerta.message);
-    setPhone(alerta.phone || '');
-    setDriverId(alerta.driverId || '');
   }
 
   function abrirWhatsApp() {
@@ -284,20 +211,37 @@ export function AlertsCenter() {
       <section className="panel">
         <h2>Alertas automáticos do sistema</h2>
 
-        {automaticAlerts.length === 0 ? (
+        {autoAlerts.length === 0 ? (
           <div className="empty">Nenhum alerta automático no momento.</div>
         ) : (
           <div className="templateGrid">
-            {automaticAlerts.map((alerta) => (
-              <button
-                key={alerta.id}
-                type="button"
-                className={`templateCard ${alerta.level}`}
-                onClick={() => selecionarAlertaAutomatico(alerta)}
-              >
-                <strong>{alerta.title}</strong>
-                <span>{alerta.message}</span>
-              </button>
+            {autoAlerts.map((alert, index) => (
+              <div key={index} className={`templateCard ${alert.nivel}`}>
+                <strong>{alert.tipo}</strong>
+                <span>{alert.texto}</span>
+
+                <button
+                  type="button"
+                  style={{ marginTop: 8 }}
+                  onClick={() => {
+                    const driver =
+                      alert.driver ||
+                      drivers.find(
+                        (item) => String(item.id) === String(alert.driverId),
+                      );
+
+                    if (driver) {
+                      setDriverId(driver.id);
+                      setPhone(driver.phone || driver.telefone || '');
+                    }
+
+                    setTitle(alert.tipo);
+                    setMessage(alert.texto);
+                  }}
+                >
+                  Enviar alerta
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -409,6 +353,17 @@ export function AlertsCenter() {
         .templateCard span {
           font-size: 12px;
           color: #667085;
+        }
+
+        .templateCard button {
+          background: #2563eb;
+          color: white;
+          border: none;
+          padding: 7px 10px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 12px;
         }
 
         .formGrid {

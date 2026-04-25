@@ -1,5 +1,10 @@
+import { AppShell } from '@/components/app-shell';
 import AlertsCenter from '@/components/alerts-center';
 
-export default function AlertsPage() {
-  return <AlertsCenter />;
+export default function AlertasPage() {
+  return (
+    <AppShell title="Alertas" pathname="/alertas">
+      <AlertsCenter />
+    </AppShell>
+  );
 }
