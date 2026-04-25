@@ -6,8 +6,6 @@ type Driver = {
   nome?: string;
   phone?: string;
   telefone?: string;
-  status?: string;
-  active?: boolean;
   cnh_expiration?: string;
   cnh_vencimento?: string;
 };
@@ -29,66 +27,47 @@ type Contract = {
   vencimento_pagamento?: string;
 };
 
-function formatDate(date?: string) {
-  if (!date) return 'Sem data';
+function nomeMotorista(driver?: Driver) {
+  return driver?.name || driver?.nome || 'Motorista não vinculado';
+}
 
-  const value = new Date(date + 'T00:00:00');
+function telefoneMotorista(driver?: Driver) {
+  return driver?.phone || driver?.telefone || '';
+}
+
+function formatarData(data?: string) {
+  if (!data) return 'Sem data';
+
+  const value = new Date(`${data}T00:00:00`);
 
   if (Number.isNaN(value.getTime())) return 'Sem data';
 
   return value.toLocaleDateString('pt-BR');
 }
 
-function daysUntil(date?: string) {
-  if (!date) return null;
+function diasAte(data?: string) {
+  if (!data) return null;
 
-  const today = new Date();
-  const due = new Date(date + 'T00:00:00');
+  const hoje = new Date();
+  const vencimento = new Date(`${data}T00:00:00`);
 
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
+  hoje.setHours(0, 0, 0, 0);
+  vencimento.setHours(0, 0, 0, 0);
 
-  if (Number.isNaN(due.getTime())) return null;
+  if (Number.isNaN(vencimento.getTime())) return null;
 
-  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.ceil((vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function driverName(driver?: Driver) {
-  return driver?.name || driver?.nome || 'Motorista não vinculado';
+function linkWhatsApp(phone?: string, message?: string) {
+  const telefone = String(phone || '').replace(/\D/g, '');
+
+  if (!telefone) return '#';
+
+  return `https://wa.me/55${telefone}?text=${encodeURIComponent(message || '')}`;
 }
 
-function driverPhone(driver?: Driver) {
-  return driver?.phone || driver?.telefone || '';
-}
-
-function getCnhDate(driver: Driver) {
-  return driver.cnh_expiration || driver.cnh_vencimento || '';
-}
-
-function getFineDate(fine: Fine) {
-  return fine.due_date || fine.vencimento || fine.date || '';
-}
-
-function getContractDate(contract: Contract) {
-  return (
-    contract.rent_due_date ||
-    contract.payment_due_date ||
-    contract.due_date ||
-    contract.vencimento_pagamento ||
-    ''
-  );
-}
-
-function whatsappLink(phone?: string, message?: string) {
-  const cleanPhone = String(phone || '').replace(/\D/g, '');
-  const text = encodeURIComponent(message || '');
-
-  if (!cleanPhone) return '#';
-
-  return `https://wa.me/55${cleanPhone}?text=${text}`;
-}
-
-export async function AlertsCenter() {
+export default async function AlertsCenter() {
   const supabase = await createSupabaseServerClient();
 
   const [driversRes, finesRes, contractsRes] = await Promise.all([
@@ -101,87 +80,92 @@ export async function AlertsCenter() {
   const fines = (finesRes.data || []) as Fine[];
   const contracts = (contractsRes.data || []) as Contract[];
 
-  const systemAlerts: any[] = [];
+  const automaticAlerts: {
+    title: string;
+    message: string;
+    date?: string;
+    driver?: Driver;
+    level: 'warning' | 'danger';
+  }[] = [];
 
   drivers.forEach((driver) => {
-    const date = getCnhDate(driver);
-    const days = daysUntil(date);
+    const cnhDate = driver.cnh_expiration || driver.cnh_vencimento;
+    const days = diasAte(cnhDate);
 
-    if (days === null) return;
-
-    if (days >= 0 && days <= 3) {
-      systemAlerts.push({
+    if (days !== null && days >= 0 && days <= 3) {
+      automaticAlerts.push({
         title: 'CNH chegando no vencimento',
-        message: `Olá, ${driverName(driver)}. Sua CNH vence em ${formatDate(date)}. Por favor, regularize antes do vencimento.`,
-        level: 'warning',
+        message: `Olá, ${nomeMotorista(driver)}. Sua CNH vence em ${formatarData(cnhDate)}. Por favor, regularize antes do vencimento.`,
+        date: cnhDate,
         driver,
-        date,
+        level: 'warning',
       });
     }
 
-    if (days < 0) {
-      systemAlerts.push({
+    if (days !== null && days < 0) {
+      automaticAlerts.push({
         title: 'CNH vencida',
-        message: `Olá, ${driverName(driver)}. Sua CNH venceu em ${formatDate(date)}. Regularize o quanto antes.`,
-        level: 'danger',
+        message: `Olá, ${nomeMotorista(driver)}. Sua CNH venceu em ${formatarData(cnhDate)}. Regularize o quanto antes.`,
+        date: cnhDate,
         driver,
-        date,
+        level: 'danger',
       });
     }
   });
 
   fines.forEach((fine) => {
-    const date = getFineDate(fine);
-    const days = daysUntil(date);
+    const fineDate = fine.due_date || fine.vencimento || fine.date;
+    const days = diasAte(fineDate);
     const driver = drivers.find((item) => String(item.id) === String(fine.driver_id));
 
-    if (days === null) return;
-
-    if (days >= 0 && days <= 3) {
-      systemAlerts.push({
+    if (days !== null && days >= 0 && days <= 3) {
+      automaticAlerts.push({
         title: 'Multa chegando no vencimento',
-        message: `Olá, ${driverName(driver)}. Existe uma multa com vencimento em ${formatDate(date)}. Por favor, verifique o pagamento.`,
-        level: 'warning',
+        message: `Olá, ${nomeMotorista(driver)}. Existe uma multa com vencimento em ${formatarData(fineDate)}. Por favor, verifique o pagamento.`,
+        date: fineDate,
         driver,
-        date,
+        level: 'warning',
       });
     }
 
-    if (days < 0) {
-      systemAlerts.push({
+    if (days !== null && days < 0) {
+      automaticAlerts.push({
         title: 'Multa vencida',
-        message: `Olá, ${driverName(driver)}. Existe uma multa vencida desde ${formatDate(date)}. Regularize o quanto antes.`,
-        level: 'danger',
+        message: `Olá, ${nomeMotorista(driver)}. Existe uma multa vencida desde ${formatarData(fineDate)}. Regularize o quanto antes.`,
+        date: fineDate,
         driver,
-        date,
+        level: 'danger',
       });
     }
   });
 
   contracts.forEach((contract) => {
-    const date = getContractDate(contract);
-    const days = daysUntil(date);
+    const paymentDate =
+      contract.rent_due_date ||
+      contract.payment_due_date ||
+      contract.due_date ||
+      contract.vencimento_pagamento;
+
+    const days = diasAte(paymentDate);
     const driver = drivers.find((item) => String(item.id) === String(contract.driver_id));
 
-    if (days === null) return;
-
-    if (days >= 0 && days <= 3) {
-      systemAlerts.push({
+    if (days !== null && days >= 0 && days <= 3) {
+      automaticAlerts.push({
         title: 'Dia do pagamento chegando',
-        message: `Olá, ${driverName(driver)}. O pagamento do aluguel vence em ${formatDate(date)}. Por favor, se programe para evitar atraso.`,
-        level: 'warning',
+        message: `Olá, ${nomeMotorista(driver)}. O pagamento do aluguel vence em ${formatarData(paymentDate)}. Por favor, se programe para evitar atraso.`,
+        date: paymentDate,
         driver,
-        date,
+        level: 'warning',
       });
     }
 
-    if (days < 0) {
-      systemAlerts.push({
+    if (days !== null && days < 0) {
+      automaticAlerts.push({
         title: 'Pagamento vencido',
-        message: `Olá, ${driverName(driver)}. O pagamento do aluguel está vencido desde ${formatDate(date)}. Regularize o quanto antes.`,
-        level: 'danger',
+        message: `Olá, ${nomeMotorista(driver)}. O pagamento do aluguel está vencido desde ${formatarData(paymentDate)}. Regularize o quanto antes.`,
+        date: paymentDate,
         driver,
-        date,
+        level: 'danger',
       });
     }
   });
@@ -189,28 +173,28 @@ export async function AlertsCenter() {
   const templates = [
     {
       title: 'CNH chegando no vencimento',
+      text: 'Aviso: a CNH está chegando no vencimento.',
       level: 'warning',
-      message: 'Aviso: a CNH está chegando no vencimento.',
     },
     {
       title: 'Multa chegando no vencimento',
+      text: 'Aviso: existe uma multa chegando no vencimento.',
       level: 'warning',
-      message: 'Aviso: existe uma multa chegando no vencimento.',
     },
     {
       title: 'Dia do pagamento chegando',
+      text: 'Aviso: o dia do pagamento do aluguel está chegando.',
       level: 'warning',
-      message: 'Aviso: o dia do pagamento do aluguel está chegando.',
     },
     {
       title: 'CNH vencida',
+      text: 'Vencido: a CNH está vencida.',
       level: 'danger',
-      message: 'Vencido: a CNH está vencida.',
     },
     {
       title: 'Pagamento vencido',
+      text: 'Vencido: o pagamento do aluguel está atrasado.',
       level: 'danger',
-      message: 'Vencido: o pagamento do aluguel está atrasado.',
     },
   ];
 
@@ -222,10 +206,10 @@ export async function AlertsCenter() {
         <h2>Mensagens prontas</h2>
 
         <div className="templateGrid">
-          {templates.map((template) => (
-            <div key={template.title} className={`templateCard ${template.level}`}>
-              <strong>{template.title}</strong>
-              <span>{template.message}</span>
+          {templates.map((item) => (
+            <div key={item.title} className={`templateCard ${item.level}`}>
+              <strong>{item.title}</strong>
+              <span>{item.text}</span>
             </div>
           ))}
         </div>
@@ -234,27 +218,28 @@ export async function AlertsCenter() {
       <section className="panel">
         <div className="sectionHeader">
           <h2>Alertas automáticos do sistema</h2>
-          <span>{systemAlerts.length} alerta(s)</span>
+          <span>{automaticAlerts.length} alerta(s)</span>
         </div>
 
         <div className="alertList">
-          {systemAlerts.length === 0 ? (
+          {automaticAlerts.length === 0 ? (
             <div className="empty">Nenhum alerta automático no momento.</div>
           ) : (
-            systemAlerts.map((alert, index) => (
+            automaticAlerts.map((alert, index) => (
               <div key={index} className={`alertCard ${alert.level}`}>
                 <div>
                   <strong>{alert.title}</strong>
                   <p>{alert.message}</p>
                   <small>
-                    Motorista: {driverName(alert.driver)} | Vencimento: {formatDate(alert.date)}
+                    Motorista: {nomeMotorista(alert.driver)} | Vencimento:{' '}
+                    {formatarData(alert.date)}
                   </small>
                 </div>
 
-                {driverPhone(alert.driver) ? (
+                {telefoneMotorista(alert.driver) ? (
                   <a
                     className="whatsButton"
-                    href={whatsappLink(driverPhone(alert.driver), alert.message)}
+                    href={linkWhatsApp(telefoneMotorista(alert.driver), alert.message)}
                     target="_blank"
                   >
                     Enviar WhatsApp
@@ -282,7 +267,7 @@ export async function AlertsCenter() {
             <select>
               <option>Selecione o motorista</option>
               {drivers.map((driver) => (
-                <option key={driver.id}>{driverName(driver)}</option>
+                <option key={driver.id}>{nomeMotorista(driver)}</option>
               ))}
             </select>
           </label>
@@ -293,7 +278,7 @@ export async function AlertsCenter() {
               <option>Selecione o telefone</option>
               {drivers.map((driver) => (
                 <option key={driver.id}>
-                  {driverName(driver)} - {driverPhone(driver) || 'Sem telefone'}
+                  {nomeMotorista(driver)} - {telefoneMotorista(driver) || 'Sem telefone'}
                 </option>
               ))}
             </select>
@@ -315,14 +300,14 @@ export async function AlertsCenter() {
 
         <div className="actions">
           <button type="button">Salvar alerta</button>
-          <button type="button" className="secondary">Editar alerta</button>
+          <button type="button" className="secondary">
+            Editar alerta
+          </button>
         </div>
       </section>
 
       <style>{`
         .alertsPage {
-          padding: 10px 26px 18px;
-          background: #eef3f8;
           color: #06142f;
         }
 
@@ -366,7 +351,6 @@ export async function AlertsCenter() {
         }
 
         .templateCard span {
-          display: block;
           font-size: 12px;
           color: #667085;
           line-height: 1.35;
@@ -402,11 +386,11 @@ export async function AlertsCenter() {
         .alertCard {
           display: flex;
           justify-content: space-between;
+          align-items: center;
           gap: 12px;
           border-radius: 13px;
           padding: 11px 12px;
           border: 1px solid #e6edf5;
-          align-items: center;
         }
 
         .alertCard.warning {
@@ -524,5 +508,3 @@ export async function AlertsCenter() {
     </div>
   );
 }
-
-export default AlertsCenter;
