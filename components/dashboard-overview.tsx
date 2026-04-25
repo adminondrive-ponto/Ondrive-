@@ -1,35 +1,42 @@
-
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-function normalizarStatus(valor: any) {
+function normalizar(valor: any) {
   return String(valor || '').toLowerCase().trim();
 }
 
-function contarPorStatus(lista: any[], statusBuscado: string) {
-  return lista.filter((item) => normalizarStatus(item.status) === statusBuscado).length;
+function statusVeiculo(valor: any) {
+  const status = normalizar(valor);
+
+  if (['alugado', 'rented', 'locado'].includes(status)) return 'Alugado';
+  if (['disponivel', 'disponível', 'available'].includes(status)) return 'Disponível';
+  if (['vendido', 'sold'].includes(status)) return 'Vendido';
+  if (['manutencao', 'manutenção', 'em manutenção', 'maintenance'].includes(status)) {
+    return 'Em manutenção';
+  }
+
+  return 'Não informado';
 }
 
-function textoStatus(valor: any) {
-  const status = normalizarStatus(valor);
-
-  if (status === 'alugado') return 'Alugado';
-  if (status === 'disponivel' || status === 'disponível') return 'Disponível';
-  if (status === 'vendido') return 'Vendido';
-  if (status === 'manutencao' || status === 'manutenção' || status === 'em manutenção') return 'Em manutenção';
-
-  return valor || 'Não informado';
+function contarStatus(lista: any[], statusFinal: string) {
+  return lista.filter((item) => statusVeiculo(item.status) === statusFinal).length;
 }
 
 function badgeClasse(valor: any) {
-  const status = normalizarStatus(valor);
+  const texto = statusVeiculo(valor);
+  const normal = normalizar(valor);
 
-  if (status.includes('dispon') || status === 'ativo' || valor === true) return 'badge green';
-  if (status.includes('alug')) return 'badge blue';
-  if (status.includes('vend')) return 'badge purple';
-  if (status.includes('manut')) return 'badge orange';
-  if (status.includes('inativo') || valor === false) return 'badge gray';
+  if (texto === 'Disponível' || normal === 'ativo' || valor === true) return 'badge green';
+  if (texto === 'Alugado') return 'badge blue';
+  if (texto === 'Vendido') return 'badge purple';
+  if (texto === 'Em manutenção') return 'badge orange';
 
   return 'badge gray';
+}
+
+function textoAtivo(valor: any) {
+  if (valor === true) return 'Ativo';
+  if (valor === false) return 'Inativo';
+  return 'Não vinculado';
 }
 
 export async function DashboardOverview() {
@@ -52,28 +59,18 @@ export async function DashboardOverview() {
   const fines = finesRes.data || [];
   const inspections = inspectionsRes.data || [];
 
-  const alugados = contarPorStatus(vehicles, 'alugado');
-  const disponiveis =
-    contarPorStatus(vehicles, 'disponivel') +
-    contarPorStatus(vehicles, 'disponível');
-
-  const vendidos = contarPorStatus(vehicles, 'vendido');
-
-  const manutencao =
-    contarPorStatus(vehicles, 'manutencao') +
-    contarPorStatus(vehicles, 'manutenção') +
-    contarPorStatus(vehicles, 'em manutenção');
+  const alugados = contarStatus(vehicles, 'Alugado');
+  const disponiveis = contarStatus(vehicles, 'Disponível');
+  const vendidos = contarStatus(vehicles, 'Vendido');
+  const manutencao = contarStatus(vehicles, 'Em manutenção');
 
   return (
     <div className="dashboard">
-      <h1>Painel Operacional</h1>
-      <p className="subtitle">Visão geral da operação em tempo real</p>
-
       <div className="topCards">
         <div className="bigCard">
           <div className="icon blueIcon">🚘</div>
           <div>
-            <b>Veículos Alugados</b>
+            <b>Veículos alugados</b>
             <strong>{alugados}</strong>
             <small>Total alugados</small>
           </div>
@@ -100,7 +97,7 @@ export async function DashboardOverview() {
         <div className="bigCard">
           <div className="icon orangeIcon">🔧</div>
           <div>
-            <b>Em Manutenção</b>
+            <b>Em manutenção</b>
             <strong>{manutencao}</strong>
             <small>Em manutenção</small>
           </div>
@@ -149,7 +146,6 @@ export async function DashboardOverview() {
 
       <section className="panel tablePanel">
         <h2>🚘 Veículos</h2>
-        <p className="subtitle small">Lista de veículos cadastrados</p>
 
         <div className="tableBox">
           <table>
@@ -174,11 +170,15 @@ export async function DashboardOverview() {
               ) : (
                 vehicles.map((vehicle: any) => {
                   const driver = drivers.find(
-                    (d: any) => String(d.id) === String(vehicle.driver_id),
+                    (d: any) =>
+                      String(d.id) === String(vehicle.driver_id) ||
+                      String(d.vehicle_id) === String(vehicle.id),
                   );
 
                   const investor = investors.find(
-                    (i: any) => String(i.id) === String(vehicle.investor_id),
+                    (i: any) =>
+                      String(i.id) === String(vehicle.investor_id) ||
+                      String(i.vehicle_id) === String(vehicle.id),
                   );
 
                   const vehicleName =
@@ -196,7 +196,7 @@ export async function DashboardOverview() {
 
                       <td>
                         <span className={badgeClasse(vehicle.status)}>
-                          {textoStatus(vehicle.status)}
+                          {statusVeiculo(vehicle.status)}
                         </span>
                       </td>
 
@@ -204,11 +204,7 @@ export async function DashboardOverview() {
 
                       <td>
                         <span className={badgeClasse(driver?.active)}>
-                          {driver
-                            ? driver?.active
-                              ? 'Ativo'
-                              : 'Inativo'
-                            : 'Não vinculado'}
+                          {textoAtivo(driver?.active)}
                         </span>
                       </td>
 
@@ -216,11 +212,7 @@ export async function DashboardOverview() {
 
                       <td>
                         <span className={badgeClasse(investor?.active)}>
-                          {investor
-                            ? investor?.active
-                              ? 'Ativo'
-                              : 'Inativo'
-                            : 'Não vinculado'}
+                          {textoAtivo(investor?.active)}
                         </span>
                       </td>
                     </tr>
@@ -234,77 +226,58 @@ export async function DashboardOverview() {
 
       <style>{`
         .dashboard {
-          padding: 18px 28px;
+          padding: 10px 26px 18px;
           background: #eef3f8;
-          min-height: 100vh;
           color: #06142f;
-        }
-
-        h1 {
-          font-size: 28px;
-          line-height: 1.1;
-          margin: 0 0 6px;
-          font-weight: 800;
-        }
-
-        .subtitle {
-          color: #667085;
-          font-size: 15px;
-          margin: 0 0 18px;
-        }
-
-        .subtitle.small {
-          font-size: 13px;
-          margin-bottom: 12px;
         }
 
         .topCards {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
-          margin-bottom: 18px;
+          gap: 12px;
+          margin-bottom: 14px;
         }
 
         .bigCard {
           background: white;
-          border-radius: 18px;
-          padding: 16px 18px;
+          border-radius: 16px;
+          padding: 13px 15px;
           display: flex;
           align-items: center;
-          gap: 14px;
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+          gap: 12px;
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
           border: 1px solid #e6edf5;
-          min-height: 118px;
+          min-height: 92px;
         }
 
         .bigCard b {
-          font-size: 14px;
           display: block;
+          font-size: 13px;
           line-height: 1.15;
         }
 
         .bigCard strong {
           display: block;
-          font-size: 30px;
+          font-size: 26px;
           line-height: 1;
-          margin: 6px 0;
+          margin: 5px 0;
         }
 
         .bigCard small,
         .smallCard small {
           color: #667085;
-          font-size: 13px;
+          font-size: 12px;
         }
 
         .icon {
-          width: 58px;
-          height: 58px;
-          min-width: 58px;
+          width: 48px;
+          height: 48px;
+          min-width: 48px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 25px;
+          font-size: 21px;
         }
 
         .blueIcon { background: #e8f0ff; }
@@ -314,47 +287,47 @@ export async function DashboardOverview() {
 
         .panel {
           background: white;
-          border-radius: 18px;
-          padding: 18px;
-          margin-bottom: 18px;
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+          border-radius: 16px;
+          padding: 14px;
+          margin-bottom: 14px;
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
           border: 1px solid #e6edf5;
         }
 
         .cardsGrid {
           display: grid;
           grid-template-columns: repeat(6, 1fr);
-          gap: 12px;
+          gap: 10px;
         }
 
         .smallCard {
           border: 1px solid #e6edf5;
-          border-radius: 15px;
-          padding: 14px 16px;
+          border-radius: 13px;
+          padding: 11px 13px;
           background: white;
-          min-height: 98px;
+          min-height: 78px;
         }
 
         .smallCard span {
-          font-size: 14px;
+          font-size: 13px;
         }
 
         .smallCard strong {
           display: block;
-          font-size: 28px;
+          font-size: 24px;
           line-height: 1;
-          margin: 8px 0;
+          margin: 6px 0;
         }
 
         .tablePanel h2 {
-          font-size: 21px;
-          margin: 0 0 4px;
+          font-size: 18px;
+          margin: 0 0 10px;
         }
 
         .tableBox {
           overflow-x: auto;
           border: 1px solid #e6edf5;
-          border-radius: 15px;
+          border-radius: 13px;
         }
 
         table {
@@ -366,39 +339,39 @@ export async function DashboardOverview() {
         th {
           background: #f8fafc;
           text-align: left;
-          padding: 12px 14px;
+          padding: 10px 12px;
           color: #667085;
-          font-size: 12px;
+          font-size: 11px;
           text-transform: uppercase;
           font-weight: 800;
           white-space: nowrap;
         }
 
         td {
-          padding: 12px 14px;
+          padding: 10px 12px;
           border-top: 1px solid #eef2f6;
           color: #344054;
-          font-size: 14px;
+          font-size: 13px;
           white-space: nowrap;
         }
 
         td b {
           color: #06142f;
-          font-size: 14px;
+          font-size: 13px;
         }
 
         td small {
           color: #667085;
-          font-size: 12px;
+          font-size: 11px;
         }
 
         .badge {
           display: inline-flex;
-          padding: 6px 11px;
+          padding: 5px 9px;
           border-radius: 999px;
           font-weight: 700;
-          font-size: 12px;
-          min-width: 78px;
+          font-size: 11px;
+          min-width: 74px;
           justify-content: center;
         }
 
@@ -411,17 +384,7 @@ export async function DashboardOverview() {
         .empty {
           text-align: center;
           color: #667085;
-          padding: 22px;
-        }
-
-        @media (max-width: 1300px) {
-          .topCards {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .cardsGrid {
-            grid-template-columns: repeat(3, 1fr);
-          }
+          padding: 18px;
         }
       `}</style>
     </div>
