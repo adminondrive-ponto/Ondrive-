@@ -67,7 +67,7 @@ function linkWhatsApp(phone?: string, message?: string) {
   return `https://wa.me/55${telefone}?text=${encodeURIComponent(message || '')}`;
 }
 
-export default async function AlertsCenter() {
+export async function AlertsCenter() {
   const supabase = await createSupabaseServerClient();
 
   const [driversRes, finesRes, contractsRes] = await Promise.all([
@@ -508,3 +508,5 @@ export default async function AlertsCenter() {
     </div>
   );
 }
+
+export default AlertsCenter;
