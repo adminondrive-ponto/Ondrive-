@@ -22,33 +22,27 @@ function textoStatus(valor: any) {
 function badgeClasse(valor: any) {
   const status = normalizarStatus(valor);
 
-  if (status.includes('ativo') || status.includes('dispon')) return 'badge green';
+  if (status.includes('dispon') || status === 'ativo' || valor === true) return 'badge green';
   if (status.includes('alug')) return 'badge blue';
   if (status.includes('vend')) return 'badge purple';
   if (status.includes('manut')) return 'badge orange';
-  if (status.includes('inativo')) return 'badge gray';
+  if (status.includes('inativo') || valor === false) return 'badge gray';
 
   return 'badge gray';
 }
 
-export default async function DashboardOverview() {
+export async function DashboardOverview() {
   const supabase = await createSupabaseServerClient();
 
-  const [
-    vehiclesRes,
-    driversRes,
-    investorsRes,
-    contractsRes,
-    finesRes,
-    inspectionsRes,
-  ] = await Promise.all([
-    supabase.from('vehicles').select('*'),
-    supabase.from('drivers').select('*'),
-    supabase.from('investors').select('*'),
-    supabase.from('contracts').select('*'),
-    supabase.from('fines').select('*'),
-    supabase.from('inspections').select('*'),
-  ]);
+  const [vehiclesRes, driversRes, investorsRes, contractsRes, finesRes, inspectionsRes] =
+    await Promise.all([
+      supabase.from('vehicles').select('*'),
+      supabase.from('drivers').select('*'),
+      supabase.from('investors').select('*'),
+      supabase.from('contracts').select('*'),
+      supabase.from('fines').select('*'),
+      supabase.from('inspections').select('*'),
+    ]);
 
   const vehicles = vehiclesRes.data || [];
   const drivers = driversRes.data || [];
@@ -58,8 +52,7 @@ export default async function DashboardOverview() {
   const inspections = inspectionsRes.data || [];
 
   const alugados = contarPorStatus(vehicles, 'alugado');
-  const disponiveis =
-    contarPorStatus(vehicles, 'disponivel') + contarPorStatus(vehicles, 'disponível');
+  const disponiveis = contarPorStatus(vehicles, 'disponivel') + contarPorStatus(vehicles, 'disponível');
   const vendidos = contarPorStatus(vehicles, 'vendido');
   const manutencao =
     contarPorStatus(vehicles, 'manutencao') +
@@ -67,99 +60,31 @@ export default async function DashboardOverview() {
     contarPorStatus(vehicles, 'em manutenção');
 
   return (
-    <div className="dashboard">
-      <div className="header">
-        <h1>Painel Operacional</h1>
-        <p>Visão geral da operação em tempo real</p>
+    <div style={{ padding: 32, background: '#eef3f8', minHeight: '100vh', color: '#06142f' }}>
+      <h1 style={{ fontSize: 34, margin: 0 }}>Painel Operacional</h1>
+      <p style={{ color: '#667085', fontSize: 17 }}>Visão geral da operação em tempo real</p>
+
+      <div className="topCards">
+        <div className="bigCard"><div className="icon blue">🚘</div><div><b>Veículos Alugados</b><strong>{alugados}</strong><small>Total alugados</small></div></div>
+        <div className="bigCard"><div className="icon green">✅</div><div><b>Disponíveis</b><strong>{disponiveis}</strong><small>Prontos para locação</small></div></div>
+        <div className="bigCard"><div className="icon purple">🏷️</div><div><b>Vendidos</b><strong>{vendidos}</strong><small>Total vendidos</small></div></div>
+        <div className="bigCard"><div className="icon orange">🔧</div><div><b>Em Manutenção</b><strong>{manutencao}</strong><small>Em manutenção</small></div></div>
       </div>
 
-      <section className="topCards">
-        <div className="bigCard blueLight">
-          <div className="icon">🚘</div>
-          <div>
-            <span>Veículos Alugados</span>
-            <strong>{alugados}</strong>
-            <small>Total alugados</small>
-          </div>
-        </div>
-
-        <div className="bigCard greenLight">
-          <div className="icon">✅</div>
-          <div>
-            <span>Disponíveis</span>
-            <strong>{disponiveis}</strong>
-            <small>Prontos para locação</small>
-          </div>
-        </div>
-
-        <div className="bigCard purpleLight">
-          <div className="icon">🏷️</div>
-          <div>
-            <span>Vendidos</span>
-            <strong>{vendidos}</strong>
-            <small>Total vendidos</small>
-          </div>
-        </div>
-
-        <div className="bigCard orangeLight">
-          <div className="icon">🔧</div>
-          <div>
-            <span>Em Manutenção</span>
-            <strong>{manutencao}</strong>
-            <small>Em manutenção</small>
-          </div>
+      <section className="panel">
+        <div className="cardsGrid">
+          <div className="smallCard"><span>Veículos</span><strong>{vehicles.length}</strong><small>Total</small></div>
+          <div className="smallCard"><span>Motoristas</span><strong>{drivers.length}</strong><small>Total</small></div>
+          <div className="smallCard"><span>Contratos</span><strong>{contracts.length}</strong><small>Ativos</small></div>
+          <div className="smallCard"><span>Multas</span><strong>{fines.length}</strong><small>Pendentes</small></div>
+          <div className="smallCard"><span>Vistorias</span><strong>{inspections.length}</strong><small>Pendentes</small></div>
+          <div className="smallCard"><span>Sócios</span><strong>{investors.length}</strong><small>Total</small></div>
         </div>
       </section>
 
       <section className="panel">
-        <h2>Painel operacional</h2>
-
-        <div className="cardsGrid">
-          <div className="smallCard">
-            <span>Veículos</span>
-            <strong>{vehicles.length}</strong>
-            <small>Total</small>
-          </div>
-
-          <div className="smallCard">
-            <span>Motoristas</span>
-            <strong>{drivers.length}</strong>
-            <small>Total</small>
-          </div>
-
-          <div className="smallCard">
-            <span>Contratos</span>
-            <strong>{contracts.length}</strong>
-            <small>Ativos</small>
-          </div>
-
-          <div className="smallCard">
-            <span>Multas</span>
-            <strong>{fines.length}</strong>
-            <small>Pendentes</small>
-          </div>
-
-          <div className="smallCard">
-            <span>Vistorias</span>
-            <strong>{inspections.length}</strong>
-            <small>Pendentes</small>
-          </div>
-
-          <div className="smallCard">
-            <span>Sócios</span>
-            <strong>{investors.length}</strong>
-            <small>Total</small>
-          </div>
-        </div>
-      </section>
-
-      <section className="tablePanel">
-        <div className="tableTitle">
-          <div>
-            <h2>🚘 Veículos</h2>
-            <p>Lista de veículos cadastrados</p>
-          </div>
-        </div>
+        <h2>🚘 Veículos</h2>
+        <p style={{ color: '#667085' }}>Lista de veículos cadastrados</p>
 
         <div className="tableBox">
           <table>
@@ -175,216 +100,94 @@ export default async function DashboardOverview() {
             </thead>
 
             <tbody>
-              {vehicles.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="empty">
-                    Nenhum veículo cadastrado.
-                  </td>
-                </tr>
-              ) : (
-                vehicles.map((vehicle: any) => {
-                  const driver = drivers.find(
-                    (d: any) =>
-                      String(d.id) === String(vehicle.driver_id) ||
-                      String(d.vehicle_id) === String(vehicle.id),
-                  );
+              {vehicles.map((vehicle: any) => {
+                const driver = drivers.find((d: any) => String(d.id) === String(vehicle.driver_id));
+                const investor = investors.find((i: any) => String(i.id) === String(vehicle.investor_id));
 
-                  const investor = investors.find(
-                    (i: any) =>
-                      String(i.id) === String(vehicle.investor_id) ||
-                      String(i.vehicle_id) === String(vehicle.id),
-                  );
-
-                  const vehicleName =
-                    `${vehicle.brand || ''} ${vehicle.model || ''}`.trim() ||
-                    vehicle.name ||
-                    'Veículo sem nome';
-
-                  const driverName =
-                    driver?.name ||
-                    driver?.full_name ||
-                    driver?.nome ||
-                    'Sem motorista';
-
-                  const investorName =
-                    investor?.name ||
-                    investor?.full_name ||
-                    investor?.nome ||
-                    'Sem sócio';
-
-                  return (
-                    <tr key={vehicle.id}>
-                      <td>
-                        <div className="vehicleCell">
-                          <div className="carIcon">🚗</div>
-                          <div>
-                            <strong>{vehicleName}</strong>
-                            <small>{vehicle.plate || 'Sem placa'}</small>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td>
-                        <span className={badgeClasse(vehicle.status)}>
-                          {textoStatus(vehicle.status)}
-                        </span>
-                      </td>
-
-                      <td>{driverName}</td>
-
-                      <td>
-                        <span className={badgeClasse(driver?.status || driver?.active)}>
-                          {driver
-                            ? driver?.status || (driver?.active ? 'Ativo' : 'Inativo')
-                            : 'Não vinculado'}
-                        </span>
-                      </td>
-
-                      <td>{investorName}</td>
-
-                      <td>
-                        <span className={badgeClasse(investor?.status || investor?.active)}>
-                          {investor
-                            ? investor?.status || (investor?.active ? 'Ativo' : 'Inativo')
-                            : 'Não vinculado'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+                return (
+                  <tr key={vehicle.id}>
+                    <td>
+                      <b>{`${vehicle.brand || ''} ${vehicle.model || ''}`.trim() || 'Veículo sem nome'}</b>
+                      <br />
+                      <small>{vehicle.plate || 'Sem placa'}</small>
+                    </td>
+                    <td><span className={badgeClasse(vehicle.status)}>{textoStatus(vehicle.status)}</span></td>
+                    <td>{driver?.name || driver?.nome || 'Sem motorista'}</td>
+                    <td><span className={badgeClasse(driver?.active)}>{driver ? (driver?.active ? 'Ativo' : 'Inativo') : 'Não vinculado'}</span></td>
+                    <td>{investor?.name || investor?.nome || 'Sem sócio'}</td>
+                    <td><span className={badgeClasse(investor?.active)}>{investor ? (investor?.active ? 'Ativo' : 'Inativo') : 'Não vinculado'}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </section>
 
       <style>{`
-        .dashboard {
-          width: 100%;
-          padding: 28px 34px;
-          background: #eef3f8;
-          min-height: 100vh;
-          color: #06142f;
-        }
-
-        .header h1 {
-          font-size: 34px;
-          font-weight: 800;
-          margin: 0;
-          letter-spacing: -0.8px;
-        }
-
-        .header p {
-          margin: 8px 0 26px;
-          font-size: 17px;
-          color: #667085;
-        }
-
         .topCards {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(4, 1fr);
           gap: 20px;
-          margin-bottom: 26px;
+          margin: 25px 0;
         }
 
-        .bigCard {
-          background: #fff;
+        .bigCard, .panel {
+          background: white;
           border-radius: 22px;
           padding: 24px;
-          display: flex;
-          align-items: center;
-          gap: 20px;
           box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
           border: 1px solid #e6edf5;
         }
 
-        .icon {
-          width: 76px;
-          height: 76px;
-          border-radius: 50%;
+        .bigCard {
           display: flex;
+          gap: 18px;
           align-items: center;
-          justify-content: center;
-          font-size: 34px;
-        }
-
-        .blueLight .icon { background: #e8f0ff; }
-        .greenLight .icon { background: #e7f8ef; }
-        .purpleLight .icon { background: #f0e7ff; }
-        .orangeLight .icon { background: #fff0e5; }
-
-        .bigCard span,
-        .smallCard span {
-          display: block;
-          font-size: 15px;
-          font-weight: 700;
-          color: #344054;
         }
 
         .bigCard strong {
           display: block;
           font-size: 38px;
-          line-height: 1;
-          margin: 8px 0;
-          color: #071631;
+          margin: 6px 0;
         }
 
-        .bigCard small,
-        .smallCard small {
+        .bigCard small, .smallCard small {
           color: #667085;
-          font-size: 14px;
         }
 
-        .panel,
-        .tablePanel {
-          background: #fff;
-          border-radius: 22px;
-          padding: 24px;
-          margin-bottom: 26px;
-          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
-          border: 1px solid #e6edf5;
+        .icon {
+          width: 74px;
+          height: 74px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 32px;
         }
 
-        .panel h2,
-        .tablePanel h2 {
-          margin: 0 0 20px;
-          font-size: 25px;
-          font-weight: 800;
-          letter-spacing: -0.4px;
-        }
+        .icon.blue { background: #e8f0ff; }
+        .icon.green { background: #e7f8ef; }
+        .icon.purple { background: #f0e7ff; }
+        .icon.orange { background: #fff0e5; }
 
         .cardsGrid {
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(5, 1fr);
           gap: 18px;
         }
 
         .smallCard {
-          background: #fff;
-          border-radius: 18px;
-          padding: 20px 22px;
           border: 1px solid #e6edf5;
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+          border-radius: 18px;
+          padding: 20px;
+          background: white;
         }
 
         .smallCard strong {
           display: block;
           font-size: 32px;
           margin: 8px 0;
-          color: #071631;
-        }
-
-        .tableTitle {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 16px;
-        }
-
-        .tableTitle p {
-          margin: -10px 0 0;
-          color: #667085;
-          font-size: 15px;
         }
 
         .tableBox {
@@ -396,126 +199,39 @@ export default async function DashboardOverview() {
         table {
           width: 100%;
           border-collapse: collapse;
-          background: #fff;
-        }
-
-        thead {
-          background: #f8fafc;
         }
 
         th {
+          background: #f8fafc;
           text-align: left;
-          padding: 17px 20px;
+          padding: 16px;
+          color: #667085;
           font-size: 13px;
           text-transform: uppercase;
-          color: #667085;
-          letter-spacing: 0.5px;
-          font-weight: 800;
-          border-bottom: 1px solid #e6edf5;
         }
 
         td {
-          padding: 18px 20px;
-          font-size: 15px;
+          padding: 18px 16px;
+          border-top: 1px solid #eef2f6;
           color: #344054;
-          border-bottom: 1px solid #eef2f6;
-        }
-
-        tr:last-child td {
-          border-bottom: none;
-        }
-
-        .vehicleCell {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-        }
-
-        .vehicleCell strong {
-          display: block;
-          font-size: 16px;
-          color: #06142f;
-        }
-
-        .vehicleCell small {
-          color: #667085;
-          font-size: 14px;
-        }
-
-        .carIcon {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          background: #f1f5f9;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 23px;
         }
 
         .badge {
           display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-width: 92px;
-          padding: 8px 13px;
+          padding: 8px 14px;
           border-radius: 999px;
-          font-size: 14px;
           font-weight: 700;
+          font-size: 14px;
         }
 
-        .green {
-          background: #dcfce7;
-          color: #15803d;
-        }
-
-        .blue {
-          background: #dbeafe;
-          color: #1d4ed8;
-        }
-
-        .purple {
-          background: #ede9fe;
-          color: #6d28d9;
-        }
-
-        .orange {
-          background: #ffedd5;
-          color: #c2410c;
-        }
-
-        .gray {
-          background: #f1f5f9;
-          color: #475569;
-        }
-
-        .empty {
-          text-align: center;
-          padding: 32px;
-          color: #667085;
-        }
-
-        @media (max-width: 1200px) {
-          .topCards {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .cardsGrid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 768px) {
-          .dashboard {
-            padding: 20px;
-          }
-
-          .topCards,
-          .cardsGrid {
-            grid-template-columns: 1fr;
-          }
-        }
+        .badge.green { background: #dcfce7; color: #15803d; }
+        .badge.blue { background: #dbeafe; color: #1d4ed8; }
+        .badge.purple { background: #ede9fe; color: #6d28d9; }
+        .badge.orange { background: #ffedd5; color: #c2410c; }
+        .badge.gray { background: #f1f5f9; color: #475569; }
       `}</style>
     </div>
   );
 }
+
+export default DashboardOverview;
