@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 
 type Driver = {
   id: string;
@@ -8,20 +9,192 @@ type Driver = {
   nome?: string;
   phone?: string;
   telefone?: string;
+  cnh_due_date?: string;
+  cnh_expiration?: string;
+  license_expiration?: string;
 };
 
-function nomeMotorista(driver?: Driver) {
-  return driver?.name || driver?.nome || 'Motorista não vinculado';
-}
+type AutoAlert = {
+  id: string;
+  title: string;
+  message: string;
+  level: 'warning' | 'danger';
+  phone?: string;
+  driverId?: string;
+};
 
-function telefoneMotorista(driver?: Driver) {
-  return driver?.phone || driver?.telefone || '';
-}
-
-export default function AlertsCenter() {
+export function AlertsCenter() {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [phone, setPhone] = useState('');
+  const [driverId, setDriverId] = useState('');
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [automaticAlerts, setAutomaticAlerts] = useState<AutoAlert[]>([]);
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+  );
+
+  function diasAteVencimento(data: string) {
+    const hoje = new Date();
+    const vencimento = new Date(data);
+
+    hoje.setHours(0, 0, 0, 0);
+    vencimento.setHours(0, 0, 0, 0);
+
+    return Math.ceil(
+      (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  }
+
+  function formatarData(data: string) {
+    return new Date(data).toLocaleDateString('pt-BR', {
+      timeZone: 'UTC',
+    });
+  }
+
+  function criarAlerta(
+    id: string,
+    tituloBase: string,
+    dataVencimento: string,
+    motorista?: Driver,
+  ): AutoAlert | null {
+    const dias = diasAteVencimento(dataVencimento);
+
+    if (dias > 3) return null;
+
+    const vencido = dias < 0;
+    const hoje = dias === 0;
+
+    const nomeMotorista =
+      motorista?.name || motorista?.nome || 'motorista selecionado';
+
+    return {
+      id,
+      title: vencido
+        ? `${tituloBase} vencido`
+        : hoje
+          ? `${tituloBase} vence hoje`
+          : `${tituloBase} próximo do vencimento`,
+      message: vencido
+        ? `Vencido: ${tituloBase} de ${nomeMotorista} venceu em ${formatarData(
+            dataVencimento,
+          )}. Regularize o quanto antes.`
+        : `Aviso: ${tituloBase} de ${nomeMotorista} vence em ${formatarData(
+            dataVencimento,
+          )}. Faltam ${dias} dia(s).`,
+      level: vencido ? 'danger' : 'warning',
+      phone: motorista?.phone || motorista?.telefone || '',
+      driverId: motorista?.id,
+    };
+  }
+
+  useEffect(() => {
+    async function carregarDados() {
+      const { data: driversData } = await supabase.from('drivers').select('*');
+      const listaMotoristas = (driversData || []) as Driver[];
+
+      setDrivers(listaMotoristas);
+
+      const novosAlertas: AutoAlert[] = [];
+
+      listaMotoristas.forEach((driver) => {
+        const dataCnh =
+          driver.cnh_due_date ||
+          driver.cnh_expiration ||
+          driver.license_expiration;
+
+        if (!dataCnh) return;
+
+        const alerta = criarAlerta(
+          `cnh-${driver.id}-${dataCnh}`,
+          'CNH',
+          dataCnh,
+          driver,
+        );
+
+        if (alerta) novosAlertas.push(alerta);
+      });
+
+      const { data: multas } = await supabase.from('fines').select('*');
+
+      multas?.forEach((multa: any) => {
+        const dataVencimento =
+          multa.due_date || multa.payment_date || multa.date;
+
+        if (!dataVencimento || multa.paid === true) return;
+
+        const motorista = listaMotoristas.find(
+          (driver) => String(driver.id) === String(multa.driver_id),
+        );
+
+        const alerta = criarAlerta(
+          `multa-${multa.id}-${dataVencimento}`,
+          'Multa',
+          dataVencimento,
+          motorista,
+        );
+
+        if (alerta) novosAlertas.push(alerta);
+      });
+
+      const { data: financeiro } = await supabase
+        .from('financial')
+        .select('*');
+
+      financeiro?.forEach((pagamento: any) => {
+        const dataVencimento =
+          pagamento.due_date || pagamento.payment_date || pagamento.date;
+
+        if (!dataVencimento || pagamento.paid === true) return;
+
+        const motorista = listaMotoristas.find(
+          (driver) => String(driver.id) === String(pagamento.driver_id),
+        );
+
+        const alerta = criarAlerta(
+          `pagamento-${pagamento.id}-${dataVencimento}`,
+          'Pagamento do aluguel',
+          dataVencimento,
+          motorista,
+        );
+
+        if (alerta) novosAlertas.push(alerta);
+      });
+
+      const { data: contratos } = await supabase
+        .from('contracts')
+        .select('*');
+
+      contratos?.forEach((contrato: any) => {
+        const dataVencimento =
+          contrato.due_date ||
+          contrato.payment_date ||
+          contrato.end_date ||
+          contrato.date;
+
+        if (!dataVencimento || contrato.paid === true) return;
+
+        const motorista = listaMotoristas.find(
+          (driver) => String(driver.id) === String(contrato.driver_id),
+        );
+
+        const alerta = criarAlerta(
+          `contrato-${contrato.id}-${dataVencimento}`,
+          'Contrato',
+          dataVencimento,
+          motorista,
+        );
+
+        if (alerta) novosAlertas.push(alerta);
+      });
+
+      setAutomaticAlerts(novosAlertas);
+    }
+
+    carregarDados();
+  }, []);
 
   const templates = [
     {
@@ -54,6 +227,23 @@ export default function AlertsCenter() {
     },
   ];
 
+  function selecionarMotorista(id: string) {
+    setDriverId(id);
+
+    const driver = drivers.find((item) => String(item.id) === String(id));
+
+    if (driver) {
+      setPhone(driver.phone || driver.telefone || '');
+    }
+  }
+
+  function selecionarAlertaAutomatico(alerta: AutoAlert) {
+    setTitle(alerta.title);
+    setMessage(alerta.message);
+    setPhone(alerta.phone || '');
+    setDriverId(alerta.driverId || '');
+  }
+
   function abrirWhatsApp() {
     const cleanPhone = phone.replace(/\D/g, '');
 
@@ -77,6 +267,7 @@ export default function AlertsCenter() {
           {templates.map((item) => (
             <button
               key={item.title}
+              type="button"
               className={`templateCard ${item.level}`}
               onClick={() => {
                 setTitle(item.title);
@@ -93,9 +284,23 @@ export default function AlertsCenter() {
       <section className="panel">
         <h2>Alertas automáticos do sistema</h2>
 
-        <div className="empty">
-          Nenhum alerta automático no momento.
-        </div>
+        {automaticAlerts.length === 0 ? (
+          <div className="empty">Nenhum alerta automático no momento.</div>
+        ) : (
+          <div className="templateGrid">
+            {automaticAlerts.map((alerta) => (
+              <button
+                key={alerta.id}
+                type="button"
+                className={`templateCard ${alerta.level}`}
+                onClick={() => selecionarAlertaAutomatico(alerta)}
+              >
+                <strong>{alerta.title}</strong>
+                <span>{alerta.message}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="panel">
@@ -109,6 +314,21 @@ export default function AlertsCenter() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ex: Pagamento vencido"
             />
+          </label>
+
+          <label>
+            Motorista
+            <select
+              value={driverId}
+              onChange={(e) => selecionarMotorista(e.target.value)}
+            >
+              <option value="">Selecione o motorista</option>
+              {drivers.map((driver) => (
+                <option key={driver.id} value={driver.id}>
+                  {driver.name || driver.nome || 'Motorista sem nome'}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
@@ -131,9 +351,9 @@ export default function AlertsCenter() {
         </label>
 
         <div className="actions">
-          <button>Salvar alerta</button>
+          <button type="button">Salvar alerta</button>
 
-          <button onClick={abrirWhatsApp}>
+          <button type="button" onClick={abrirWhatsApp}>
             Abrir WhatsApp
           </button>
         </div>
@@ -154,7 +374,7 @@ export default function AlertsCenter() {
 
         h2 {
           font-size: 18px;
-          margin-bottom: 12px;
+          margin: 0 0 12px;
         }
 
         .templateGrid {
@@ -193,26 +413,44 @@ export default function AlertsCenter() {
 
         .formGrid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
+          grid-template-columns: 2fr 1fr 1fr;
+          gap: 12px;
+          align-items: end;
+        }
+
+        label {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          font-size: 13px;
+          font-weight: 600;
         }
 
         input,
+        select,
         textarea {
           border: 1px solid #dbe3ee;
           border-radius: 10px;
-          padding: 8px;
+          padding: 10px;
           font-size: 13px;
+          width: 100%;
         }
 
         .messageField {
-          margin-top: 10px;
+          margin-top: 12px;
+          width: 100%;
+        }
+
+        .messageField textarea {
+          width: 100%;
+          min-height: 80px;
         }
 
         .actions {
-          margin-top: 10px;
+          margin-top: 12px;
           display: flex;
           gap: 10px;
+          justify-content: flex-start;
         }
 
         .actions button {
@@ -222,6 +460,11 @@ export default function AlertsCenter() {
           padding: 8px 12px;
           border-radius: 10px;
           cursor: pointer;
+          font-weight: 600;
+        }
+
+        .actions button:last-child {
+          background: #22c55e;
         }
 
         .empty {
@@ -233,3 +476,5 @@ export default function AlertsCenter() {
     </div>
   );
 }
+
+export default AlertsCenter;
