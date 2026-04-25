@@ -1,585 +1,767 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Driver = {
   id: string;
-  name?: string | null;
-  phone?: string | null;
+  name?: string;
+  nome?: string;
+  phone?: string;
+  telefone?: string;
+  status?: string;
+  active?: boolean;
+  cnh_expiration?: string;
+  cnh_vencimento?: string;
 };
 
-type AlertType =
-  | 'cnh_vencendo'
-  | 'cnh_vencida'
-  | 'multa_vencendo'
-  | 'multa_vencida'
-  | 'aluguel_vencendo'
-  | 'aluguel_vencido_rescindido'
-  | 'venda_vencendo'
-  | 'venda_vencida_rescindido'
-  | 'revisao'
-  | 'contrato_rescindido';
-
-type AlertTemplate = {
+type Fine = {
   id: string;
-  type: AlertType;
-  title: string;
-  message: string;
+  driver_id?: string;
+  vehicle_id?: string;
+  due_date?: string;
+  vencimento?: string;
+  date?: string;
+  amount?: number;
+  value?: number;
+  status?: string;
 };
 
-type AutoAlert = {
+type Contract = {
+  id: string;
+  driver_id?: string;
+  vehicle_id?: string;
+  rent_due_date?: string;
+  payment_due_date?: string;
+  due_date?: string;
+  vencimento_pagamento?: string;
+  status?: string;
+};
+
+type SystemAlert = {
   id: string;
   type: string;
   title: string;
-  date: string;
-  days: number;
-  status: 'vencido' | 'vence_hoje' | 'a_vencer';
+  message: string;
+  level: 'warning' | 'danger';
+  driverId?: string;
+  driverName?: string;
+  phone?: string;
+  dueDate?: string;
+  daysLeft?: number;
 };
 
-const alertTypes: Record<AlertType, { title: string; color: string; bg: string }> = {
-  cnh_vencendo: { title: 'CNH vencendo', color: '#1d4ed8', bg: '#eff6ff' },
-  cnh_vencida: { title: 'CNH vencida', color: '#b91c1c', bg: '#fef2f2' },
-  multa_vencendo: { title: 'Multa vencendo', color: '#b45309', bg: '#fffbeb' },
-  multa_vencida: { title: 'Multa vencida', color: '#b91c1c', bg: '#fef2f2' },
-  aluguel_vencendo: { title: 'Aluguel vencendo', color: '#7c3aed', bg: '#f5f3ff' },
-  aluguel_vencido_rescindido: { title: 'Aluguel vencido + rescisão', color: '#b91c1c', bg: '#fef2f2' },
-  venda_vencendo: { title: 'Venda vencendo', color: '#047857', bg: '#ecfdf5' },
-  venda_vencida_rescindido: { title: 'Venda vencida + rescisão', color: '#b91c1c', bg: '#fef2f2' },
-  revisao: { title: 'Revisão obrigatória', color: '#0f766e', bg: '#f0fdfa' },
-  contrato_rescindido: { title: 'Contrato rescindido', color: '#991b1b', bg: '#fef2f2' },
+type ManualAlert = {
+  id: string;
+  title: string;
+  message: string;
+  driverId: string;
+  phone: string;
+  level: 'warning' | 'danger';
 };
 
-const defaultTemplates: AlertTemplate[] = [
-  {
-    id: '1',
-    type: 'cnh_vencendo',
-    title: 'Aviso de CNH vencendo',
-    message:
-      'Sua CNH está próxima do vencimento. Por favor, envie a atualização para evitarmos bloqueios operacionais.',
-  },
-  {
-    id: '2',
-    type: 'cnh_vencida',
-    title: 'CNH vencida',
-    message:
-      'Sua CNH consta como vencida. É necessário regularizar imediatamente para continuar com a operação.',
-  },
-  {
-    id: '3',
-    type: 'multa_vencendo',
-    title: 'Multa próxima do vencimento',
-    message:
-      'Existe uma multa próxima do vencimento. Regularize dentro do prazo para evitar juros e restrições.',
-  },
-  {
-    id: '4',
-    type: 'multa_vencida',
-    title: 'Multa vencida',
-    message:
-      'Existe uma multa vencida vinculada ao seu cadastro/veículo. Regularize imediatamente para evitar novas medidas.',
-  },
-  {
-    id: '5',
-    type: 'aluguel_vencendo',
-    title: 'Aluguel vencendo',
-    message:
-      'Seu aluguel está próximo do vencimento. Pedimos que se organize para manter o pagamento em dia.',
-  },
-  {
-    id: '6',
-    type: 'aluguel_vencido_rescindido',
-    title: 'Aluguel vencido e contrato rescindido',
-    message:
-      'Seu aluguel está vencido. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
-  },
-  {
-    id: '7',
-    type: 'venda_vencendo',
-    title: 'Venda vencendo',
-    message:
-      'Sua parcela da venda está próxima do vencimento. Pedimos atenção ao prazo de pagamento.',
-  },
-  {
-    id: '8',
-    type: 'venda_vencida_rescindido',
-    title: 'Venda vencida e contrato rescindido',
-    message:
-      'Sua parcela da venda está vencida. Caso não haja regularização imediata, seu contrato poderá ser rescindido conforme regras acordadas.',
-  },
-  {
-    id: '9',
-    type: 'revisao',
-    title: 'Revisão obrigatória',
-    message:
-      'Seu veículo precisa passar por revisão obrigatória. Agende o quanto antes para evitar bloqueio operacional.',
-  },
-  {
-    id: '10',
-    type: 'contrato_rescindido',
-    title: 'Contrato rescindido',
-    message:
-      'Informamos que seu contrato foi rescindido. Entre em contato para alinhamento dos próximos passos.',
-  },
-];
+function formatDate(date?: string) {
+  if (!date) return 'Sem data';
 
-function diffDays(date: string) {
+  const value = new Date(date + 'T00:00:00');
+
+  if (Number.isNaN(value.getTime())) return 'Sem data';
+
+  return value.toLocaleDateString('pt-BR');
+}
+
+function daysUntil(date?: string) {
+  if (!date) return null;
+
   const today = new Date();
-  const due = new Date(date);
+  const due = new Date(date + 'T00:00:00');
 
   today.setHours(0, 0, 0, 0);
   due.setHours(0, 0, 0, 0);
 
-  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (Number.isNaN(due.getTime())) return null;
+
+  const diff = due.getTime() - today.getTime();
+
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function getAutoStatus(days: number): AutoAlert['status'] {
-  if (days < 0) return 'vencido';
-  if (days === 0) return 'vence_hoje';
-  return 'a_vencer';
+function driverName(driver?: Driver) {
+  return driver?.name || driver?.nome || 'Motorista não vinculado';
 }
 
-function getDateValue(item: any) {
+function driverPhone(driver?: Driver) {
+  return driver?.phone || driver?.telefone || '';
+}
+
+function encodeWhatsApp(text: string) {
+  return encodeURIComponent(text);
+}
+
+function getContractDueDate(contract: Contract) {
   return (
-    item.due_date ||
-    item.dueDate ||
-    item.expiration_date ||
-    item.end_date ||
-    item.payment_due_date ||
-    item.next_inspection_date ||
-    item.date ||
-    null
+    contract.rent_due_date ||
+    contract.payment_due_date ||
+    contract.due_date ||
+    contract.vencimento_pagamento ||
+    ''
   );
+}
+
+function getFineDueDate(fine: Fine) {
+  return fine.due_date || fine.vencimento || fine.date || '';
+}
+
+function getDriverCnhDate(driver: Driver) {
+  return driver.cnh_expiration || driver.cnh_vencimento || '';
 }
 
 export function AlertsCenter() {
-  const supabase = getSupabaseBrowserClient() as any;
+  const supabase = createSupabaseBrowserClient();
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [driverId, setDriverId] = useState('');
-  const [alertType, setAlertType] = useState<AlertType>('cnh_vencendo');
-  const [templates, setTemplates] = useState<AlertTemplate[]>(defaultTemplates);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [customMessage, setCustomMessage] = useState('');
-  const [newTitle, setNewTitle] = useState('');
-  const [newMessage, setNewMessage] = useState('');
-  const [status, setStatus] = useState('');
+  const [fines, setFines] = useState<Fine[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [manualAlerts, setManualAlerts] = useState<ManualAlert[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [alertsAuto, setAlertsAuto] = useState<AutoAlert[]>([]);
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
-
-  const selectedDriver = useMemo(
-    () => drivers.find((d) => String(d.id) === String(driverId)),
-    [drivers, driverId],
-  );
-
-  const filteredTemplates = templates.filter((item) => item.type === alertType);
-
-  const finalMessage = selectedDriver
-    ? `Olá, ${selectedDriver.name || 'motorista'}. ${customMessage}`
-    : customMessage;
+  const [form, setForm] = useState<ManualAlert>({
+    id: '',
+    title: '',
+    message: '',
+    driverId: '',
+    phone: '',
+    level: 'warning',
+  });
 
   useEffect(() => {
-    const savedTemplates = localStorage.getItem('ondrive_alert_templates');
-    const savedDismissed = localStorage.getItem('ondrive_alertas_ok');
+    async function loadData() {
+      const [driversRes, finesRes, contractsRes] = await Promise.all([
+        supabase.from('drivers').select('*'),
+        supabase.from('fines').select('*'),
+        supabase.from('contracts').select('*'),
+      ]);
 
-    if (savedTemplates) {
-      setTemplates(JSON.parse(savedTemplates));
+      setDrivers((driversRes.data || []) as Driver[]);
+      setFines((finesRes.data || []) as Fine[]);
+      setContracts((contractsRes.data || []) as Contract[]);
     }
 
-    if (savedDismissed) {
-      setDismissedAlerts(JSON.parse(savedDismissed));
+    loadData();
+
+    const saved = localStorage.getItem('ondrive_manual_alerts');
+
+    if (saved) {
+      setManualAlerts(JSON.parse(saved));
     }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('ondrive_alert_templates', JSON.stringify(templates));
-  }, [templates]);
-
-  useEffect(() => {
-    async function loadDrivers() {
-      const { data } = await supabase
-        .from('drivers')
-        .select('id,name,phone')
-        .order('name', { ascending: true });
-
-      setDrivers((data as Driver[]) ?? []);
-    }
-
-    void loadDrivers();
   }, [supabase]);
 
   useEffect(() => {
-    async function loadAutoAlerts() {
-      const result: AutoAlert[] = [];
+    localStorage.setItem('ondrive_manual_alerts', JSON.stringify(manualAlerts));
+  }, [manualAlerts]);
 
-      const tables = [
-        { table: 'drivers', type: 'CNH', title: 'CNH do motorista' },
-        { table: 'fines', type: 'Multa', title: 'Multa próxima do vencimento' },
-        { table: 'contracts', type: 'Contrato', title: 'Contrato próximo do vencimento' },
-        { table: 'inspections', type: 'Vistoria', title: 'Vistoria próxima do vencimento' },
-      ];
+  const selectedDriver = useMemo(
+    () => drivers.find((driver) => String(driver.id) === String(form.driverId)),
+    [drivers, form.driverId],
+  );
 
-      for (const item of tables) {
-        const { data } = await supabase.from(item.table).select('*');
+  const systemAlerts = useMemo<SystemAlert[]>(() => {
+    const alerts: SystemAlert[] = [];
 
-        ((data as any[]) ?? []).forEach((row) => {
-          const date = getDateValue(row);
+    drivers.forEach((driver) => {
+      const dueDate = getDriverCnhDate(driver);
+      const days = daysUntil(dueDate);
 
-          if (!date) return;
+      if (days === null) return;
 
-          const days = diffDays(date);
-
-          if (days <= 3) {
-            const id = `${item.table}-${row.id}-${date}`;
-
-            result.push({
-              id,
-              type: item.type,
-              title:
-                row.name ||
-                row.title ||
-                row.description ||
-                row.plate ||
-                item.title,
-              date,
-              days,
-              status: getAutoStatus(days),
-            });
-          }
+      if (days >= 0 && days <= 3) {
+        alerts.push({
+          id: `cnh-warning-${driver.id}`,
+          type: 'CNH',
+          title: 'CNH chegando no vencimento',
+          message: `Olá, ${driverName(driver)}. Sua CNH vence em ${formatDate(dueDate)}. Por favor, regularize antes do vencimento.`,
+          level: 'warning',
+          driverId: driver.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
         });
       }
 
-      setAlertsAuto(result);
+      if (days < 0) {
+        alerts.push({
+          id: `cnh-danger-${driver.id}`,
+          type: 'CNH',
+          title: 'CNH vencida',
+          message: `Olá, ${driverName(driver)}. Sua CNH venceu em ${formatDate(dueDate)}. Regularize o quanto antes para evitar bloqueios na operação.`,
+          level: 'danger',
+          driverId: driver.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
+        });
+      }
+    });
+
+    fines.forEach((fine) => {
+      const dueDate = getFineDueDate(fine);
+      const days = daysUntil(dueDate);
+      const driver = drivers.find((item) => String(item.id) === String(fine.driver_id));
+
+      if (days === null) return;
+
+      if (days >= 0 && days <= 3) {
+        alerts.push({
+          id: `fine-warning-${fine.id}`,
+          type: 'Multa',
+          title: 'Multa chegando no vencimento',
+          message: `Olá, ${driverName(driver)}. Existe uma multa com vencimento em ${formatDate(dueDate)}. Por favor, verifique o pagamento.`,
+          level: 'warning',
+          driverId: driver?.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
+        });
+      }
+
+      if (days < 0) {
+        alerts.push({
+          id: `fine-danger-${fine.id}`,
+          type: 'Multa',
+          title: 'Multa vencida',
+          message: `Olá, ${driverName(driver)}. Existe uma multa vencida desde ${formatDate(dueDate)}. Regularize o quanto antes.`,
+          level: 'danger',
+          driverId: driver?.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
+        });
+      }
+    });
+
+    contracts.forEach((contract) => {
+      const dueDate = getContractDueDate(contract);
+      const days = daysUntil(dueDate);
+      const driver = drivers.find((item) => String(item.id) === String(contract.driver_id));
+
+      if (days === null) return;
+
+      if (days >= 0 && days <= 3) {
+        alerts.push({
+          id: `payment-warning-${contract.id}`,
+          type: 'Pagamento',
+          title: 'Dia do pagamento chegando',
+          message: `Olá, ${driverName(driver)}. O pagamento do aluguel vence em ${formatDate(dueDate)}. Por favor, se programe para evitar atraso.`,
+          level: 'warning',
+          driverId: driver?.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
+        });
+      }
+
+      if (days < 0) {
+        alerts.push({
+          id: `payment-danger-${contract.id}`,
+          type: 'Pagamento',
+          title: 'Pagamento vencido',
+          message: `Olá, ${driverName(driver)}. O pagamento do aluguel está vencido desde ${formatDate(dueDate)}. Regularize o quanto antes.`,
+          level: 'danger',
+          driverId: driver?.id,
+          driverName: driverName(driver),
+          phone: driverPhone(driver),
+          dueDate,
+          daysLeft: days,
+        });
+      }
+    });
+
+    return alerts;
+  }, [drivers, fines, contracts]);
+
+  function handleDriverChange(driverId: string) {
+    const driver = drivers.find((item) => String(item.id) === String(driverId));
+
+    setForm((current) => ({
+      ...current,
+      driverId,
+      phone: driverPhone(driver),
+    }));
+  }
+
+  function saveManualAlert() {
+    if (!form.title.trim() || !form.message.trim()) return;
+
+    const payload: ManualAlert = {
+      ...form,
+      id: editingId || crypto.randomUUID(),
+    };
+
+    if (editingId) {
+      setManualAlerts((current) =>
+        current.map((alert) => (alert.id === editingId ? payload : alert)),
+      );
+    } else {
+      setManualAlerts((current) => [payload, ...current]);
     }
 
-    void loadAutoAlerts();
-  }, [supabase]);
-
-  const visibleAutoAlerts = alertsAuto.filter(
-    (alert) => !dismissedAlerts.includes(alert.id),
-  );
-
-  function dismissAlert(id: string) {
-    const updated = [...dismissedAlerts, id];
-
-    setDismissedAlerts(updated);
-    localStorage.setItem('ondrive_alertas_ok', JSON.stringify(updated));
+    setEditingId(null);
+    setForm({
+      id: '',
+      title: '',
+      message: '',
+      driverId: '',
+      phone: '',
+      level: 'warning',
+    });
   }
 
-  function selectTemplate(template: AlertTemplate) {
-    setSelectedTemplateId(template.id);
-    setCustomMessage(template.message);
-    setStatus('');
+  function editManualAlert(alert: ManualAlert) {
+    setEditingId(alert.id);
+    setForm(alert);
   }
 
-  function saveEditedTemplate() {
-    if (!selectedTemplateId) return;
-
-    setTemplates((old) =>
-      old.map((item) =>
-        item.id === selectedTemplateId ? { ...item, message: customMessage } : item,
-      ),
-    );
-
-    setStatus('Mensagem editada e salva.');
+  function removeManualAlert(id: string) {
+    setManualAlerts((current) => current.filter((alert) => alert.id !== id));
   }
 
-  function createTemplate() {
-    if (!newTitle.trim() || !newMessage.trim()) return;
-
-    setTemplates((old) => [
-      ...old,
-      {
-        id: crypto.randomUUID(),
-        type: alertType,
-        title: newTitle.trim(),
-        message: newMessage.trim(),
-      },
-    ]);
-
-    setNewTitle('');
-    setNewMessage('');
-    setStatus('Nova mensagem criada.');
-  }
-
-  async function copyText() {
-    await navigator.clipboard.writeText(finalMessage);
-    setStatus('Mensagem copiada.');
-  }
+  const templates = [
+    {
+      title: 'CNH chegando no vencimento',
+      level: 'warning',
+      message:
+        'Olá, sua CNH está chegando no vencimento. Por favor, regularize antes da data limite.',
+    },
+    {
+      title: 'Multa chegando no vencimento',
+      level: 'warning',
+      message:
+        'Olá, existe uma multa chegando no vencimento. Por favor, verifique o pagamento.',
+    },
+    {
+      title: 'CNH vencida',
+      level: 'danger',
+      message:
+        'Olá, sua CNH está vencida. Regularize o quanto antes para evitar bloqueios na operação.',
+    },
+    {
+      title: 'Dia do pagamento chegando',
+      level: 'warning',
+      message:
+        'Olá, o dia do pagamento do aluguel está chegando. Por favor, se programe para evitar atraso.',
+    },
+    {
+      title: 'Pagamento vencido',
+      level: 'danger',
+      message:
+        'Olá, o pagamento do aluguel está vencido. Regularize o quanto antes.',
+    },
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <section className="card" style={{ padding: 24 }}>
-        <h2 style={{ marginTop: 0, marginBottom: 6, fontSize: 22, fontWeight: 700 }}>
-          Central de Alertas
-        </h2>
+    <div className="alertsPage">
+      <h1>Alertas</h1>
 
-        <p style={{ color: '#64748b', fontSize: 14, marginTop: 0 }}>
-          Controle vencimentos automáticos e mensagens prontas para motoristas.
-        </p>
-      </section>
+      <section className="panel">
+        <h2>Mensagens prontas</h2>
 
-      <section className="card" style={{ padding: 24 }}>
-        <h3 style={{ marginTop: 0, fontSize: 18, fontWeight: 700 }}>
-          Vencimentos próximos
-        </h3>
-
-        {visibleAutoAlerts.length === 0 ? (
-          <p style={{ fontSize: 14, color: '#64748b' }}>
-            Nenhum vencimento próximo.
-          </p>
-        ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            {visibleAutoAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                style={{
-                  borderRadius: 12,
-                  padding: 14,
-                  border: '1px solid #e5e7eb',
-                  background:
-                    alert.status === 'vencido'
-                      ? '#fee2e2'
-                      : alert.status === 'vence_hoje'
-                        ? '#fef3c7'
-                        : '#eff6ff',
-                }}
-              >
-                <strong>{alert.type}</strong>
-
-                <p style={{ margin: '6px 0' }}>{alert.title}</p>
-
-                <p style={{ margin: '6px 0' }}>
-                  Vencimento: {new Date(alert.date).toLocaleDateString('pt-BR')}
-                </p>
-
-                <p style={{ margin: '6px 0' }}>
-                  {alert.days < 0
-                    ? `Vencido há ${Math.abs(alert.days)} dia(s)`
-                    : alert.days === 0
-                      ? 'Vence hoje'
-                      : `Vence em ${alert.days} dia(s)`}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => dismissAlert(alert.id)}
-                  style={{
-                    marginTop: 6,
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#111827',
-                    color: '#fff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  OK
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="card" style={{ padding: 24 }}>
-        <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
-          Tipos de mensagens
-        </h3>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
-          {Object.entries(alertTypes).map(([key, item]) => (
+        <div className="templateGrid">
+          {templates.map((template) => (
             <button
-              key={key}
+              key={template.title}
+              className={`templateCard ${template.level}`}
               type="button"
-              onClick={() => {
-                setAlertType(key as AlertType);
-                setSelectedTemplateId('');
-                setCustomMessage('');
-                setStatus('');
-              }}
-              style={{
-                border:
-                  alertType === key
-                    ? `1px solid ${item.color}`
-                    : '1px solid #dbe3ef',
-                background: alertType === key ? item.bg : '#fff',
-                color: alertType === key ? item.color : '#334155',
-                padding: '9px 13px',
-                borderRadius: 12,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              onClick={() =>
+                setForm((current) => ({
+                  ...current,
+                  title: template.title,
+                  message: template.message,
+                  level: template.level as 'warning' | 'danger',
+                }))
+              }
             >
-              {item.title}
+              <strong>{template.title}</strong>
+              <span>{template.message}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1.15fr .85fr',
-          gap: 18,
-          alignItems: 'start',
-        }}
-      >
-        <div className="card" style={{ padding: 24 }}>
-          <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
-            Mensagens prontas
-          </h3>
-
-          <div style={{ display: 'grid', gap: 10 }}>
-            {filteredTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                onClick={() => selectTemplate(template)}
-                style={{
-                  textAlign: 'left',
-                  border:
-                    selectedTemplateId === template.id
-                      ? '1px solid #2563eb'
-                      : '1px solid #e2e8f0',
-                  background:
-                    selectedTemplateId === template.id ? '#eff6ff' : '#fff',
-                  borderRadius: 14,
-                  padding: 14,
-                  cursor: 'pointer',
-                }}
-              >
-                <strong style={{ display: 'block', fontSize: 14, marginBottom: 6 }}>
-                  {template.title}
-                </strong>
-
-                <span style={{ color: '#475569', fontSize: 13, lineHeight: 1.45 }}>
-                  {template.message}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 22, borderTop: '1px solid #e5e7eb', paddingTop: 18 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Criar nova mensagem</h3>
-
-            <div className="field">
-              <label>Título</label>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Ex: Aviso amigável de pagamento"
-                style={{ fontSize: 14 }}
-              />
-            </div>
-
-            <div className="field">
-              <label>Mensagem</label>
-              <textarea
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Digite a nova mensagem pronta..."
-                style={{ fontSize: 14, lineHeight: 1.5, minHeight: 90 }}
-              />
-            </div>
-
-            <button className="btn primary" type="button" onClick={createTemplate}>
-              Salvar nova mensagem
-            </button>
-          </div>
+      <section className="panel">
+        <div className="sectionHeader">
+          <h2>Alertas automáticos do sistema</h2>
+          <span>{systemAlerts.length} alerta(s)</span>
         </div>
 
-        <div className="card" style={{ padding: 24 }}>
-          <h3 style={{ marginTop: 0, fontSize: 17, fontWeight: 700 }}>
-            Preparar envio
-          </h3>
+        <div className="alertList">
+          {systemAlerts.length === 0 ? (
+            <div className="empty">Nenhum alerta automático no momento.</div>
+          ) : (
+            systemAlerts.map((alert) => (
+              <div key={alert.id} className={`alertCard ${alert.level}`}>
+                <div>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.message}</p>
+                  <small>
+                    Motorista: {alert.driverName} | Vencimento: {formatDate(alert.dueDate)}
+                  </small>
+                </div>
 
-          <div className="field">
-            <label>Motorista</label>
+                {alert.phone ? (
+                  <a
+                    className="whatsButton"
+                    href={`https://wa.me/55${alert.phone.replace(/\D/g, '')}?text=${encodeWhatsApp(alert.message)}`}
+                    target="_blank"
+                  >
+                    Enviar WhatsApp
+                  </a>
+                ) : (
+                  <span className="noPhone">Sem telefone</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>{editingId ? 'Editar alerta manual' : 'Criar alerta manual'}</h2>
+
+        <div className="formGrid">
+          <label>
+            Título
+            <input
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              placeholder="Ex: Pagamento vencido"
+            />
+          </label>
+
+          <label>
+            Motorista
             <select
-              value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
-              style={{ fontSize: 14 }}
+              value={form.driverId}
+              onChange={(event) => handleDriverChange(event.target.value)}
             >
-              <option value="">Selecione</option>
-
+              <option value="">Selecione o motorista</option>
               {drivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>
-                  {driver.name} {driver.phone ? `· ${driver.phone}` : ''}
+                  {driverName(driver)}
                 </option>
               ))}
             </select>
-          </div>
+          </label>
 
-          {selectedDriver ? (
-            <div
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: 12,
-                padding: 12,
-                marginTop: 10,
-                fontSize: 14,
-              }}
-            >
-              <strong>Telefone:</strong> {selectedDriver.phone || 'Não cadastrado'}
-            </div>
-          ) : null}
-
-          <div className="field" style={{ marginTop: 14 }}>
-            <label>Mensagem final</label>
-            <textarea
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="Clique em uma mensagem pronta ou escreva uma nova..."
-              style={{ fontSize: 14, lineHeight: 1.5, minHeight: 150 }}
+          <label>
+            Telefone
+            <input
+              value={form.phone}
+              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              placeholder="Telefone do motorista"
             />
-          </div>
+          </label>
 
-          <div
-            style={{
-              background: '#f8fafc',
-              color: '#0f172a',
-              border: '1px solid #e2e8f0',
-              borderRadius: 14,
-              padding: 14,
-              marginTop: 12,
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            <strong>Prévia:</strong> {finalMessage || 'Nenhuma mensagem selecionada.'}
-          </div>
+          <label>
+            Tipo
+            <select
+              value={form.level}
+              onChange={(event) =>
+                setForm({ ...form, level: event.target.value as 'warning' | 'danger' })
+              }
+            >
+              <option value="warning">Aviso amarelo</option>
+              <option value="danger">Vencido vermelho</option>
+            </select>
+          </label>
+        </div>
 
-          {status ? (
-            <div className="alert success" style={{ marginTop: 12, fontSize: 13 }}>
-              {status}
-            </div>
+        <label className="messageField">
+          Mensagem
+          <textarea
+            value={form.message}
+            onChange={(event) => setForm({ ...form, message: event.target.value })}
+            placeholder="Digite a mensagem do alerta"
+          />
+        </label>
+
+        <div className="actions">
+          <button type="button" onClick={saveManualAlert}>
+            {editingId ? 'Salvar edição' : 'Criar alerta'}
+          </button>
+
+          {form.phone && form.message ? (
+            <a
+              href={`https://wa.me/55${form.phone.replace(/\D/g, '')}?text=${encodeWhatsApp(form.message)}`}
+              target="_blank"
+            >
+              Enviar WhatsApp
+            </a>
           ) : null}
+        </div>
 
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button
-              className="btn"
-              type="button"
-              onClick={saveEditedTemplate}
-              disabled={!selectedTemplateId}
-            >
-              Salvar edição
-            </button>
+        <div className="manualList">
+          {manualAlerts.map((alert) => {
+            const driver = drivers.find((item) => String(item.id) === String(alert.driverId));
 
-            <button
-              className="btn primary"
-              type="button"
-              onClick={() => void copyText()}
-              disabled={!customMessage}
-            >
-              Copiar
-            </button>
-          </div>
+            return (
+              <div key={alert.id} className={`manualCard ${alert.level}`}>
+                <div>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.message}</p>
+                  <small>Motorista: {driverName(driver)}</small>
+                </div>
+
+                <div className="manualActions">
+                  <button type="button" onClick={() => editManualAlert(alert)}>
+                    Editar
+                  </button>
+                  <button type="button" onClick={() => removeManualAlert(alert.id)}>
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
+
+      <style>{`
+        .alertsPage {
+          padding: 10px 26px 18px;
+          background: #eef3f8;
+          color: #06142f;
+        }
+
+        h1 {
+          font-size: 28px;
+          margin: 0 0 18px;
+          font-weight: 800;
+        }
+
+        .panel {
+          background: white;
+          border-radius: 16px;
+          padding: 14px;
+          margin-bottom: 14px;
+          border: 1px solid #e6edf5;
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+        }
+
+        h2 {
+          font-size: 18px;
+          margin: 0 0 12px;
+        }
+
+        .templateGrid {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 10px;
+        }
+
+        .templateCard {
+          border: 1px solid #e6edf5;
+          border-radius: 13px;
+          padding: 11px;
+          text-align: left;
+          background: white;
+          cursor: pointer;
+        }
+
+        .templateCard strong {
+          display: block;
+          font-size: 13px;
+          margin-bottom: 6px;
+        }
+
+        .templateCard span {
+          display: block;
+          font-size: 12px;
+          color: #667085;
+          line-height: 1.35;
+        }
+
+        .templateCard.warning {
+          border-left: 5px solid #facc15;
+        }
+
+        .templateCard.danger {
+          border-left: 5px solid #ef4444;
+        }
+
+        .sectionHeader {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .sectionHeader span {
+          font-size: 12px;
+          color: #667085;
+          background: #f1f5f9;
+          padding: 5px 9px;
+          border-radius: 999px;
+        }
+
+        .alertList {
+          display: grid;
+          gap: 9px;
+        }
+
+        .alertCard,
+        .manualCard {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          border-radius: 13px;
+          padding: 11px 12px;
+          border: 1px solid #e6edf5;
+          align-items: center;
+        }
+
+        .alertCard.warning,
+        .manualCard.warning {
+          background: #fefce8;
+          border-left: 5px solid #facc15;
+        }
+
+        .alertCard.danger,
+        .manualCard.danger {
+          background: #fef2f2;
+          border-left: 5px solid #ef4444;
+        }
+
+        .alertCard strong,
+        .manualCard strong {
+          font-size: 13px;
+        }
+
+        .alertCard p,
+        .manualCard p {
+          font-size: 12px;
+          color: #344054;
+          margin: 4px 0;
+        }
+
+        .alertCard small,
+        .manualCard small {
+          font-size: 11px;
+          color: #667085;
+        }
+
+        .whatsButton,
+        .actions a,
+        .actions button {
+          border: 0;
+          background: #22c55e;
+          color: white;
+          padding: 8px 12px;
+          border-radius: 10px;
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .noPhone {
+          background: #f1f5f9;
+          color: #475569;
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .formGrid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+        }
+
+        label {
+          display: flex;
+          flex-direction: column;
+          font-size: 12px;
+          font-weight: 700;
+          color: #344054;
+          gap: 5px;
+        }
+
+        input,
+        select,
+        textarea {
+          border: 1px solid #dbe3ee;
+          border-radius: 10px;
+          padding: 9px 10px;
+          font-size: 13px;
+          outline: none;
+          background: white;
+          color: #06142f;
+        }
+
+        textarea {
+          min-height: 72px;
+          resize: vertical;
+        }
+
+        .messageField {
+          margin-top: 10px;
+        }
+
+        .actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .manualList {
+          display: grid;
+          gap: 9px;
+          margin-top: 12px;
+        }
+
+        .manualActions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .manualActions button {
+          border: 0;
+          background: #f1f5f9;
+          color: #06142f;
+          padding: 7px 10px;
+          border-radius: 9px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .empty {
+          text-align: center;
+          color: #667085;
+          font-size: 13px;
+          padding: 18px;
+          background: #f8fafc;
+          border-radius: 13px;
+        }
+
+        @media (max-width: 1300px) {
+          .templateGrid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .formGrid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+      `}</style>
     </div>
   );
 }
+
+export default AlertsCenter;
