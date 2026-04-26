@@ -93,6 +93,8 @@ export const moduleConfigs = {
       'financing_status',
     ],
   },
+  
+
   motoristas: {
     slug: 'motoristas',
     title: 'Motoristas',
@@ -101,12 +103,16 @@ export const moduleConfigs = {
     fields: [
       { key: 'name', label: 'Nome', type: 'text', required: true },
       { key: 'cpf', label: 'CPF', type: 'text' },
+
       { key: 'phone', label: 'Telefone', type: 'text' },
       { key: 'cep', label: 'CEP', type: 'text' },
+
       { key: 'address', label: 'Endereço', type: 'text' },
       { key: 'latitude', label: 'Latitude', type: 'number' },
+
       { key: 'longitude', label: 'Longitude', type: 'number' },
       { key: 'cnh_due_date', label: 'Vencimento da CNH', type: 'date' },
+
       {
         key: 'payment_weekday',
         label: 'Dia da semana do pagamento',
@@ -119,21 +125,22 @@ export const moduleConfigs = {
           { label: 'Sexta-feira', value: 'friday' },
         ],
       },
-      { key: 'driver_score', label: 'Score do motorista', type: 'number' },
-      { key: 'notes', label: 'Observações', type: 'textarea' },
-    ],
-    listColumns: ['name', 'cpf', 'phone', 'payment_weekday', 'cnh_due_date', 'driver_score'],
-  },
 
-  multas: {
-    slug: 'multas',
-    title: 'Multas',
-    table: 'fines',
-    orderBy: { column: 'created_at', ascending: false },
-    fields: [
+      {
+        key: 'rental_mode',
+        label: 'Tipo de contrato do motorista',
+        type: 'select',
+        options: [
+          { label: 'Aluguel', value: 'aluguel' },
+          { label: 'Venda em forma de aluguel', value: 'venda_aluguel' },
+        ],
+      },
+
+      { key: 'rent_amount', label: 'Valor da parcela que deve pagar', type: 'number' },
+
       {
         key: 'vehicle_id',
-        label: 'Veículo',
+        label: 'Veículo alugado/comprado',
         type: 'select',
         relation: {
           table: 'vehicles',
@@ -143,36 +150,57 @@ export const moduleConfigs = {
           orderBy: { column: 'plate', ascending: true },
         },
       },
-      {
-        key: 'driver_id',
-        label: 'Motorista',
-        type: 'select',
-        relation: {
-          table: 'drivers',
-          valueKey: 'id',
-          labelKey: 'name',
-          secondaryLabelKey: 'phone',
-          orderBy: { column: 'name', ascending: true },
-        },
-      },
-      { key: 'date', label: 'Data', type: 'date', required: true },
-      { key: 'due_date', label: 'Data de vencimento', type: 'date' },
-      { key: 'amount', label: 'Valor', type: 'number' },
-      {
-        key: 'status',
-        label: 'Status',
-        type: 'select',
-        options: [
-          { label: 'Pendente', value: 'pending' },
-          { label: 'Pago', value: 'paid' },
-          { label: 'Recorrido', value: 'appealed' },
-        ],
-      },
-      { key: 'description', label: 'Descrição', type: 'textarea' },
-    ],
-    listColumns: ['date', 'vehicle_id', 'driver_id', 'amount', 'due_date', 'status'],
-  },
 
+      {
+        key: 'insurance_primary_driver',
+        label: 'Principal condutor no seguro',
+        type: 'checkbox',
+      },
+
+      { key: 'driver_score', label: 'Score do motorista', type: 'number' },
+
+      { key: 'reference1_name', label: 'Referência 1 - Nome', type: 'text' },
+      { key: 'reference1_phone', label: 'Referência 1 - Telefone', type: 'text' },
+
+      { key: 'reference2_name', label: 'Referência 2 - Nome', type: 'text' },
+      { key: 'reference2_phone', label: 'Referência 2 - Telefone', type: 'text' },
+
+      { key: 'social_media_link', label: 'Link da rede social', type: 'text' },
+
+      { key: 'app_photo_path', label: 'Foto do app (JPG)', type: 'file' },
+      { key: 'residence_photo_path', label: 'Comprovante de residência (JPG)', type: 'file' },
+
+      {
+        key: 'residence_front_photo_path',
+        label: 'Foto da frente da residência (JPG)',
+        type: 'file',
+      },
+
+      {
+        key: 'signed_contract_pdf_path',
+        label: 'Contrato assinado (PDF)',
+        type: 'file',
+      },
+{
+  key: 'criminal_record_photo_path',
+  label: 'Antecedentes criminais (PDF)',
+  type: 'file',
+},
+
+      { key: 'notes', label: 'Observações', type: 'textarea' },
+    ],
+    listColumns: [
+      'name',
+      'cpf',
+      'phone',
+      'vehicle_id',
+      'rental_mode',
+      'rent_amount',
+      'payment_weekday',
+      'cnh_due_date',
+      'driver_score',
+    ],
+  },
   vistorias: {
     slug: 'vistorias',
     title: 'Vistorias',

@@ -427,25 +427,54 @@ if (config.slug === 'financeiro') {
   }
 }
 
-    try {
-      const payload = buildPayload();
+try {
+  const payload = buildPayload();
 
-      if (editingId) {
-        const { error } = await supabase
-          .from(config.table)
-          .update(payload)
-          .eq('id', editingId);
+  let savedId = editingId;
 
-        if (error) throw new Error(error.message);
+  if (editingId) {
+    const { error } = await supabase
+      .from(config.table)
+      .update(payload)
+      .eq('id', editingId);
 
-        setSuccess('Registro atualizado com sucesso.');
-      } else {
-        const { error } = await supabase.from(config.table).insert(payload);
+    if (error) throw new Error(error.message);
 
-        if (error) throw new Error(error.message);
+    setSuccess('Registro atualizado com sucesso.');
+  } else {
+    const { data, error } = await supabase
+      .from(config.table)
+      .insert(payload)
+      .select('id')
+      .single();
 
-        setSuccess('Registro salvo com sucesso.');
-      }
+    if (error) throw new Error(error.message);
+
+    savedId = data?.id ? String(data.id) : null;
+
+    setSuccess('Registro salvo com sucesso.');
+  }
+
+
+if (config.slug === 'motoristas' && savedId) {
+  // Remove este motorista de qualquer veículo antigo
+  const { error: clearOldVehicleError } = await supabase
+    .from('vehicles')
+    .update({ driver_id: null })
+    .eq('driver_id', savedId);
+
+  if (clearOldVehicleError) throw new Error(clearOldVehicleError.message);
+
+  // Vincula este motorista somente ao veículo novo selecionado
+  if (payload.vehicle_id) {
+    const { error: vehicleUpdateError } = await supabase
+      .from('vehicles')
+      .update({ driver_id: savedId })
+      .eq('id', payload.vehicle_id);
+
+    if (vehicleUpdateError) throw new Error(vehicleUpdateError.message);
+  }
+}
 
       setEditingId(null);
       setDeletingId(null);
@@ -592,25 +621,51 @@ if (config.slug === 'financeiro') {
     }
   }
 
+
  async function uploadFile(field: ModuleField, file: File) {
   setSaving(true);
   setError(null);
   setSuccess(null);
 
   try {
-    const extension = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
-    // valida tipo de arquivo
-    if (!['jpg', 'jpeg', 'png'].includes(extension)) {
-      throw new Error('Envie apenas imagem JPG, JPEG ou PNG.');
+    const isPdfOnlyField =
+      config.slug === 'motoristas' &&
+      (field.key.includes('pdf') || field.key.includes('contract'));
+
+    const allowsImageAndPdf =
+      config.slug === 'financeiro' && field.key === 'nf_photo';
+
+    if (isPdfOnlyField && extension !== 'pdf') {
+      throw new Error('Envie apenas arquivo PDF para este campo.');
     }
 
-    const bucketName = 'notas-fiscais';
+    if (
+      !isPdfOnlyField &&
+      !allowsImageAndPdf &&
+      !['jpg', 'jpeg', 'png', 'webp'].includes(extension)
+    ) {
+      throw new Error('Envie apenas imagem JPG, JPEG, PNG ou WEBP.');
+    }
 
-    const folderName =
-      config.slug === 'veiculos'
-        ? 'documentos-veiculos'
-        : config.slug;
+    if (
+      allowsImageAndPdf &&
+      !['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(extension)
+    ) {
+      throw new Error('Envie apenas imagem ou PDF para a nota fiscal.');
+    }
+
+    const bucketName =
+      config.slug === 'motoristas'
+        ? 'driver-documents'
+        : config.slug === 'veiculos'
+          ? 'vehicle-photos'
+          : config.slug === 'financeiro'
+            ? 'notas-fiscais'
+            : 'documents';
+
+    const folderName = `${config.slug}/${field.key}`;
 
     const fileName = `${folderName}/${Date.now()}-${Math.random()
       .toString(36)
@@ -627,9 +682,9 @@ if (config.slug === 'financeiro') {
     if (uploadError) throw new Error(uploadError.message);
 
     updateField(field, fileName);
-    setSuccess('Imagem enviada com sucesso. Agora salve o registro.');
+    setSuccess('Arquivo enviado com sucesso. Agora salve o registro.');
   } catch (err) {
-    setError(getSupabaseErrorMessage(err, 'Erro ao enviar imagem.'));
+    setError(getSupabaseErrorMessage(err, 'Erro ao enviar arquivo.'));
   } finally {
     setSaving(false);
   }
@@ -639,10 +694,10 @@ if (config.slug === 'financeiro') {
     <div
       className="grid-two"
    style={
-  config.slug === 'financeiro' || config.slug === 'veiculos'
+  config.slug === 'financeiro' || config.slug === 'veiculos' || config.slug === 'motoristas'
     ? {
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)',
+       gridTemplateColumns: 'minmax(0, 0.95fr) minmax(0, 1.05fr)',
         gap: 20,
         alignItems: 'start',
         width: '100%',
@@ -678,20 +733,31 @@ if (config.slug === 'financeiro') {
   </div>
 ) : null}
 
-        <form
+  <form
   onSubmit={handleSubmit}
   className="form-grid"
   style={{
     width: '100%',
     maxWidth: '100%',
     overflow: 'hidden',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+    gap: '14px 18px',
+    alignItems: 'end',
   }}
 >
           {config.fields.map((field) => (
-            <div
-              className={`field ${field.type === 'textarea' ? 'full' : ''}`}
-              key={field.key}
-            >
+  <div
+  className={`field ${field.type === 'textarea' ? 'full' : ''}`}
+  key={field.key}
+ style={{
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+}}
+
+>
               <label htmlFor={field.key}>
                 {field.label}
                 {field.required ? ' *' : ''}
@@ -735,12 +801,18 @@ if (config.slug === 'financeiro') {
                 />
               ) : isFileField(field) ? (
                 <>
-                  <input
-                    id={field.key}
-                    name={field.key}
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png"
-                    onChange={(e) => {
+  			<input
+    id={field.key}
+    name={field.key}
+    type="file"
+    accept={
+      config.slug === 'financeiro' && field.key === 'nf_photo'
+        ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+        : field.key.includes('pdf') || field.key.includes('contract')
+          ? 'application/pdf'
+          : 'image/jpeg,image/jpg,image/png,image/webp'
+    }
+    onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       void uploadFile(field, file);
@@ -753,33 +825,52 @@ if (config.slug === 'financeiro') {
                     </small>
                   ) : null}
                 </>
-              ) : (
-                <input
-                  id={field.key}
-                  name={field.key}
-                  type={String(field.type)}
-                  value={form[field.key] ?? ''}
-                  onChange={(e) => updateField(field, e.target.value)}
-                  required={field.required}
-                  placeholder={field.placeholder}
-                  readOnly={field.readonly}
-                />
-              )}
+             ) : field.key === 'address' ? (
+  <div style={{ display: 'flex', gap: 8 }}>
+    <input
+      id={field.key}
+      name={field.key}
+      type="text"
+      value={form[field.key] ?? ''}
+      onChange={(e) => updateField(field, e.target.value)}
+      required={field.required}
+      placeholder={field.placeholder}
+      readOnly={field.readonly}
+      style={{ flex: 1, minWidth: 0 }}
+/>
+
+    <button
+      type="button"
+      onClick={() => void convertAddressToCoordinates()}
+      disabled={saving}
+      style={{
+  background: '#1e3a8a',
+  border: 'none',
+  color: '#ffffff',
+  fontWeight: 700,
+  cursor: 'pointer',
+  borderRadius: 8,
+  padding: '6px 12px',
+fontSize: 13,
+}}
+    >
+      Converter
+    </button>
+  </div>
+) : (
+  <input
+    id={field.key}
+    name={field.key}
+    type={String(field.type)}
+    value={form[field.key] ?? ''}
+    onChange={(e) => updateField(field, e.target.value)}
+    required={field.required}
+    placeholder={field.placeholder}
+    readOnly={field.readonly}
+  />
+)}
             </div>
           ))}
-
-          {config.slug === 'motoristas' ? (
-            <div className="btn-row" style={{ gridColumn: '1 / -1' }}>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => void convertAddressToCoordinates()}
-                disabled={saving}
-              >
-                Converter endereço em latitude/longitude
-              </button>
-            </div>
-          ) : null}
 
           <div className="btn-row" style={{ gridColumn: '1 / -1' }}>
             <button className="btn primary" disabled={saving} type="submit">
