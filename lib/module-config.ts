@@ -201,6 +201,7 @@ export const moduleConfigs = {
       'driver_score',
     ],
   },
+
   vistorias: {
     slug: 'vistorias',
     title: 'Vistorias',
@@ -230,37 +231,116 @@ export const moduleConfigs = {
           orderBy: { column: 'name', ascending: true },
         },
       },
-      { key: 'date', label: 'Data', type: 'date', required: true },
-      { key: 'completed', label: 'Concluída', type: 'checkbox' },
-      { key: 'notes', label: 'Observações', type: 'textarea' },
-    ],
-    listColumns: ['date', 'vehicle_id', 'driver_id', 'completed', 'notes'],
-  },
+      {
+  key: 'concluida',
+  label: 'Status da vistoria',
+  type: 'select',
+  options: [
+    { label: 'Pendente', value: 'Pendente' },
+    { label: 'Concluída', value: 'Concluída' },
+  ],
+},
+{
+  key: 'date',
+  label: 'Data da vistoria',
+  type: 'date',
+  required: true,
+},
+],
+listColumns: ['vehicle_id', 'driver_id', 'concluida', 'date'],
+},
 
-  socios: {
-    slug: 'socios',
-    title: 'Sócios',
-    table: 'investors',
+  multas: {
+    slug: 'multas',
+    title: 'Multas',
+    table: 'fines',
     orderBy: { column: 'created_at', ascending: false },
     fields: [
-      { key: 'name', label: 'Nome do sócio', type: 'text', required: true },
-      { key: 'phone', label: 'Telefone', type: 'text' },
-      { key: 'cpf', label: 'CPF/CNPJ', type: 'text' },
-      { key: 'active_cars', label: 'Carros ativos', type: 'number' },
       {
-        key: 'partnership_type',
-        label: 'Tipo de parceria',
+        key: 'driver_id',
+        label: 'Motorista',
+        type: 'select',
+        relation: {
+          table: 'drivers',
+          valueKey: 'id',
+          labelKey: 'name',
+          secondaryLabelKey: 'phone',
+          orderBy: { column: 'name', ascending: true },
+        },
+      },
+      {
+        key: 'vehicle_id',
+        label: 'Veículo',
+        type: 'select',
+        relation: {
+          table: 'vehicles',
+          valueKey: 'id',
+          labelKey: 'plate',
+          secondaryLabelKey: 'model',
+          orderBy: { column: 'plate', ascending: true },
+        },
+      },
+      {
+        key: 'date',
+        label: 'Data de vencimento',
+        type: 'date',
+        required: true,
+      },
+      {
+        key: 'amount',
+        label: 'Valor da multa',
+        type: 'number',
+        required: true,
+      },
+      {
+        key: 'status',
+        label: 'Status da multa',
         type: 'select',
         options: [
-          { label: 'Carros ativos', value: 'carros_ativos' },
-          { label: 'Investidor', value: 'investidor' },
-          { label: 'Administração', value: 'administracao' },
+          { label: 'Pendente', value: 'pendente' },
+          { label: 'Paga', value: 'paga' },
+          { label: 'Vencida', value: 'vencida' },
         ],
       },
-      { key: 'notes', label: 'Observações', type: 'textarea' },
+      {
+        key: 'description',
+        label: 'Observações',
+        type: 'textarea',
+      },
     ],
-    listColumns: ['name', 'phone', 'cpf', 'active_cars', 'partnership_type'],
+    listColumns: ['driver_id', 'vehicle_id', 'date', 'amount', 'status'],
   },
+
+socios: {
+  slug: 'socios',
+  title: 'Sócios',
+  table: 'investors',
+  orderBy: { column: 'created_at', ascending: false },
+  fields: [
+    { key: 'name', label: 'Nome do sócio', type: 'text', required: true },
+    { key: 'phone', label: 'Telefone', type: 'text' },
+    { key: 'cpf', label: 'CPF/CNPJ', type: 'text' },
+
+    {
+      key: 'active_cars',
+      label: 'Carros ativos',
+      type: 'select',
+      relation: {
+        table: 'vehicles',
+        valueKey: 'id',
+        labelKey: 'plate',
+        secondaryLabelKey: 'model',
+        orderBy: { column: 'plate', ascending: true },
+      },
+    },
+
+    { key: 'adm_percentage', label: '% Administração', type: 'number' },
+    { key: 'partner_percentage', label: '% Sócio', type: 'number' },
+
+    { key: 'notes', label: 'Observações', type: 'textarea' },
+  ],
+  listColumns: ['name', 'phone', 'cpf', 'active_cars', 'adm_percentage', 'partner_percentage'],
+},
 
   financeiro: {
     slug: 'financeiro',
@@ -364,7 +444,8 @@ export const moduleConfigs = {
       { key: 'end_date', label: 'Data de fim', type: 'date' },
       { key: 'status', label: 'Status', type: 'select', options: statusOptions },
       { key: 'rent_value', label: 'Valor do aluguel', type: 'number' },
-      { key: 'repasse_value', label: 'Valor de repasse', type: 'number' },
+    { key: 'repasse_value', label: 'Repasse sócio', type: 'number' },
+{ key: 'adm_repasse_value', label: 'Repasse ADM', type: 'number' },
       {
         key: 'payment_weekday',
         label: 'Dia da semana do pagamento do aluguel',
@@ -380,8 +461,7 @@ export const moduleConfigs = {
       { key: 'monthly_payment_day', label: 'Dia mensal do pagamento de venda', type: 'number' },
       { key: 'allowed_delay_days', label: 'Dias de atraso permitido', type: 'number' },
       { key: 'late_fee', label: 'Multa por atraso', type: 'number' },
-      { key: 'contract_file_url', label: 'Link do contrato assinado/PDF', type: 'text' },
-      { key: 'photos_url', label: 'Link das fotos/documentos', type: 'text' },
+      { key: 'contract_pdf_path', label: 'Contrato assinado (PDF)', type: 'file' },
       { key: 'notes', label: 'Observações', type: 'textarea' },
     ],
     listColumns: [

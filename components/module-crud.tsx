@@ -103,7 +103,8 @@ function getColumnLabel(config: CrudModuleConfig, column: string) {
     name: 'Nome',
     phone: 'Telefone',
     cpf: 'CPF',
-    repasse_value: 'Valor repasse',
+  repasse_value: 'Repasse sócio',
+adm_repasse_value: 'Repasse ADM',
     rent_value: 'Valor aluguel',
     active_cars: 'Carros ativos',
     adm_fee: 'Repasse ADM',
@@ -630,9 +631,8 @@ if (config.slug === 'motoristas' && savedId) {
   try {
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
-    const isPdfOnlyField =
-      config.slug === 'motoristas' &&
-      (field.key.includes('pdf') || field.key.includes('contract'));
+   const isPdfOnlyField =
+  field.key.includes('pdf') || field.key.includes('contract');
 
     const allowsImageAndPdf =
       config.slug === 'financeiro' && field.key === 'nf_photo';
@@ -657,13 +657,15 @@ if (config.slug === 'motoristas' && savedId) {
     }
 
     const bucketName =
-      config.slug === 'motoristas'
-        ? 'driver-documents'
-        : config.slug === 'veiculos'
-          ? 'vehicle-photos'
-          : config.slug === 'financeiro'
-            ? 'notas-fiscais'
-            : 'documents';
+  config.slug === 'motoristas'
+    ? 'driver-documents'
+    : config.slug === 'veiculos'
+      ? 'vehicle-photos'
+      : config.slug === 'financeiro'
+        ? 'notas-fiscais'
+        : config.slug === 'contratos'
+          ? 'contract-pdfs'
+          : 'documents';
 
     const folderName = `${config.slug}/${field.key}`;
 
@@ -694,10 +696,15 @@ if (config.slug === 'motoristas' && savedId) {
     <div
       className="grid-two"
    style={
-  config.slug === 'financeiro' || config.slug === 'veiculos' || config.slug === 'motoristas'
+  config.slug === 'financeiro' ||
+config.slug === 'veiculos' ||
+config.slug === 'motoristas' ||
+config.slug === 'vistorias' ||
+config.slug === 'multas' ||
+config.slug === 'socios'
     ? {
         display: 'grid',
-       gridTemplateColumns: 'minmax(0, 0.95fr) minmax(0, 1.05fr)',
+       gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
         gap: 20,
         alignItems: 'start',
         width: '100%',
@@ -763,68 +770,99 @@ if (config.slug === 'motoristas' && savedId) {
                 {field.required ? ' *' : ''}
               </label>
 
-              {field.type === 'textarea' ? (
-                <textarea
-                  id={field.key}
-                  name={field.key}
-                  value={String(form[field.key] ?? '')}
-                  onChange={(e) => updateField(field, e.target.value)}
-                  required={field.required}
-                  placeholder={field.placeholder}
-                />
-              ) : field.type === 'select' ? (
-                <select
-                  id={field.key}
-                  name={field.key}
-                  value={String(form[field.key] ?? '')}
-                  onChange={(e) => updateField(field, e.target.value)}
-                  required={field.required}
-                >
-                  <option value="">Selecione</option>
-
-                  {(field.relation
-                    ? relationOptions[field.key] ?? []
-                    : field.options ?? []
-                  ).map((option) => (
-                    <option key={String(option.value)} value={String(option.value)}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : field.type === 'checkbox' ? (
-                <input
-                  id={field.key}
-                  name={field.key}
-                  type="checkbox"
-                  checked={Boolean(form[field.key])}
-                  onChange={(e) => updateField(field, e.target.checked)}
-                />
-              ) : isFileField(field) ? (
-                <>
-  			<input
+             
+{field.type === 'textarea' ? (
+  <textarea
     id={field.key}
     name={field.key}
-    type="file"
-    accept={
-      config.slug === 'financeiro' && field.key === 'nf_photo'
-        ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
-        : field.key.includes('pdf') || field.key.includes('contract')
-          ? 'application/pdf'
-          : 'image/jpeg,image/jpg,image/png,image/webp'
-    }
-    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      void uploadFile(field, file);
-                    }}
-                  />
+    value={String(form[field.key] ?? '')}
+    onChange={(e) => updateField(field, e.target.value)}
+    required={field.required}
+    placeholder={field.placeholder}
+  />
+) : field.type === 'select' ? (
+  <select
+    id={field.key}
+    name={field.key}
+    value={String(form[field.key] ?? '')}
+    onChange={(e) => updateField(field, e.target.value)}
+    required={field.required}
+  >
+    <option value="">Selecione</option>
 
-                  {form[field.key] ? (
-                    <small style={{ color: 'var(--muted)' }}>
-                      Arquivo enviado: {String(form[field.key])}
-                    </small>
-                  ) : null}
-                </>
+    {(field.relation
+      ? relationOptions[field.key] ?? []
+      : field.options ?? []
+    ).map((option) => (
+      <option key={String(option.value)} value={String(option.value)}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+) : field.type === 'checkbox' ? (
+  <label
+    htmlFor={field.key}
+    style={{
+      minHeight: 52,
+      width: '100%',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      cursor: 'pointer',
+      fontSize: 16,
+      background: '#fff',
+    }}
+  >
+    <input
+      id={field.key}
+      name={field.key}
+      type="checkbox"
+      checked={Boolean(form[field.key])}
+      onChange={(e) => updateField(field, e.target.checked)}
+      style={{ width: 22, height: 22, cursor: 'pointer' }}
+    />
+    {field.label}
+  </label>
+) : isFileField(field) ? (
+  <>
+    <input
+      id={field.key}
+      name={field.key}
+      type="file"
+      accept={
+        config.slug === 'financeiro' && field.key === 'nf_photo'
+          ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+          : field.key.includes('pdf') || field.key.includes('contract')
+            ? 'application/pdf'
+            : 'image/jpeg,image/jpg,image/png,image/webp'
+      }
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        void uploadFile(field, file);
+      }}
+    />
+
+    {form[field.key] ? (
+      <small style={{ color: 'var(--muted)' }}>
+        Arquivo enviado: {String(form[field.key])}
+      </small>
+    ) : null}
+  </>
+
+
+
+   
+
+
+
+
+
+
+
              ) : field.key === 'address' ? (
   <div style={{ display: 'flex', gap: 8 }}>
     <input
