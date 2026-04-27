@@ -2,14 +2,14 @@ import type { CrudModuleConfig } from '@/lib/types';
 
 export const menuItems = [
   { label: 'Painel Operacional', href: '/dashboard' },
-  { label: 'Alertas', href: '/alertas' },
   { label: 'Painel Financeiro', href: '/financeiro' },
+  { label: 'Alertas', href: '/alertas' },
   { label: 'Veículos', href: '/veiculos' },
   { label: 'Motoristas', href: '/motoristas' },
+  { label: 'Sócios', href: '/socios' },
   { label: 'Contratos', href: '/contratos' },
   { label: 'Vistorias', href: '/vistorias' },
   { label: 'Multas', href: '/multas' },
-  { label: 'Sócios', href: '/socios' },
   { label: 'IAdrive', href: '/copiloto' },
 ];
 
