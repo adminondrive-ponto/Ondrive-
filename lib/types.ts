@@ -4,6 +4,7 @@ export type ModuleFieldType =
   | 'number'
   | 'date'
   | 'select'
+  | 'multiselect'
   | 'checkbox'
   | 'file';
 
