@@ -38,8 +38,14 @@ function castValue(field: ModuleField, raw: unknown) {
   if (field.type === 'checkbox') return Boolean(raw);
 
   if (field.type === 'multiselect') {
-    return Array.isArray(raw) ? raw : [];
-  }
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((item) => {
+    // tenta converter para uuid válido (string mesmo, mas limpa)
+    return String(item).trim();
+  });
+}
+  
   if (field.type === 'number') {
     if (raw === '' || raw === null || raw === undefined) return null;
     const parsed = Number(raw);
@@ -425,12 +431,18 @@ function updateField(field: ModuleField, raw: unknown) {
       payload[field.key] = castValue(field, form[field.key]);
     });
 
-    if (config.table === 'financial_entries') {
-      return applyFinancialRules(payload);
-    }
-
-    return payload;
+  Object.keys(payload).forEach((key) => {
+  if (Array.isArray(payload[key])) {
+    payload[key] = payload[key].filter(Boolean);
   }
+});
+
+if (config.table === 'financial_entries') {
+  return applyFinancialRules(payload);
+}
+
+return payload;
+}
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -452,6 +464,21 @@ if (config.slug === 'financeiro') {
 
 try {
   const payload = buildPayload();
+
+
+
+if (config.slug === 'socios') {
+  if (typeof payload.active_cars === 'string') {
+    payload.active_cars = payload.active_cars.includes(',')
+      ? payload.active_cars.split(',').map((item) => item.trim()).filter(Boolean)
+      : [payload.active_cars];
+  }
+
+  if (Array.isArray(payload.active_cars)) {
+    payload.active_cars = payload.active_cars.map(String).filter(Boolean);
+  }
+}
+
 if (config.slug === 'multas') {
   if (payload.due_date && !payload.date) {
     payload.date = payload.due_date;
@@ -509,11 +536,24 @@ if (config.slug === 'motoristas' && savedId) {
       resetForm();
       await loadRows();
       router.refresh();
+
     } catch (err) {
-      setError(getSupabaseErrorMessage(err, 'Erro ao salvar o registro.'));
+      let message = getSupabaseErrorMessage(err, 'Erro ao salvar o registro.');
+
+if (message.includes('malformed array literal')) {
+  message = 'Erro: seleção inválida em campo múltiplo.';
+}
+
+if (message.includes('violates check constraint')) {
+  message = 'Erro: valor inválido em um dos campos.';
+}
+
+setError(message);
     } finally {
       setSaving(false);
     }
+
+
   }
 
 
