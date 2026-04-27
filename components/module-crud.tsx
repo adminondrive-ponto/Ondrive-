@@ -631,8 +631,10 @@ if (config.slug === 'motoristas' && savedId) {
   try {
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
-   const isPdfOnlyField =
+const isPdfOnlyField =
   field.key.includes('pdf') || field.key.includes('contract');
+
+const isCnhField = field.key === 'cnh_file_url';
 
     const allowsImageAndPdf =
       config.slug === 'financeiro' && field.key === 'nf_photo';
@@ -640,11 +642,20 @@ if (config.slug === 'motoristas' && savedId) {
     if (isPdfOnlyField && extension !== 'pdf') {
       throw new Error('Envie apenas arquivo PDF para este campo.');
     }
+if (
+  isCnhField &&
+  !['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(extension)
+) {
+  throw new Error('Envie imagem ou PDF para a CNH.');
+}
+
 
     if (
-      !isPdfOnlyField &&
-      !allowsImageAndPdf &&
-      !['jpg', 'jpeg', 'png', 'webp'].includes(extension)
+  !isPdfOnlyField &&
+  !allowsImageAndPdf &&
+  !isCnhField &&
+  !['jpg', 'jpeg', 'png', 'webp'].includes(extension)
+
     ) {
       throw new Error('Envie apenas imagem JPG, JPEG, PNG ou WEBP.');
     }
@@ -833,12 +844,15 @@ config.slug === 'socios'
       name={field.key}
       type="file"
       accept={
-        config.slug === 'financeiro' && field.key === 'nf_photo'
-          ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
-          : field.key.includes('pdf') || field.key.includes('contract')
-            ? 'application/pdf'
-            : 'image/jpeg,image/jpg,image/png,image/webp'
-      }
+  config.slug === 'financeiro' && field.key === 'nf_photo'
+    ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+    : field.key === 'cnh_file_url'
+      ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+      : field.key.includes('pdf') || field.key.includes('contract')
+        ? 'application/pdf'
+        : 'image/jpeg,image/jpg,image/png,image/webp'
+}
+      
       onChange={(e) => {
         const file = e.target.files?.[0];
         if (!file) return;

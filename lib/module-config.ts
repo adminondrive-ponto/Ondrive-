@@ -166,6 +166,11 @@ export const moduleConfigs = {
       { key: 'reference2_phone', label: 'Referência 2 - Telefone', type: 'text' },
 
       { key: 'social_media_link', label: 'Link da rede social', type: 'text' },
+{
+  key: 'cnh_file_url',
+  label: 'CNH do motorista (foto ou PDF)',
+  type: 'file',
+},
 
       { key: 'app_photo_path', label: 'Foto do app (JPG)', type: 'file' },
       { key: 'residence_photo_path', label: 'Comprovante de residência (JPG)', type: 'file' },
