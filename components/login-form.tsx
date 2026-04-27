@@ -25,12 +25,14 @@ export function LoginForm() {
         password,
       });
 
-      if (error) {
-        setMessage(error.message);
-        return;
-      }
+     if (error) {
+  setMessage(error.message);
+  return;
+}
 
-      router.replace('/dashboard');
+sessionStorage.setItem('ondrive_login_aba_ativa', 'sim');
+
+router.replace('/dashboard');
       router.refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Não foi possível entrar.');

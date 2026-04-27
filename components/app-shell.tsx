@@ -1,8 +1,12 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { LogoutButton } from '@/components/auth-actions';
 import { menuItems } from '@/lib/module-config';
-
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 export function AppShell({
   children,
   title,
@@ -12,7 +16,22 @@ export function AppShell({
   description?: string;
   pathname?: string;
 }) {
-  return (
+  const router = useRouter();
+
+useEffect(() => {
+  const abaAtiva = sessionStorage.getItem('ondrive_login_aba_ativa');
+
+  if (abaAtiva !== 'sim') {
+    const supabase = getSupabaseBrowserClient();
+
+    supabase.auth.signOut().finally(() => {
+      router.replace('/login');
+      router.refresh();
+    });
+  }
+}, [router]);
+
+return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">Ondrive</div>
