@@ -17,6 +17,7 @@ function isFileField(field: ModuleField) {
 
 function defaultValue(field: ModuleField) {
   if (field.type === 'checkbox') return false;
+  if (field.type === 'multiselect') return [];
   return '';
 }
 
@@ -36,6 +37,9 @@ function normalizeDateForInput(value: unknown) {
 function castValue(field: ModuleField, raw: unknown) {
   if (field.type === 'checkbox') return Boolean(raw);
 
+  if (field.type === 'multiselect') {
+    return Array.isArray(raw) ? raw : [];
+  }
   if (field.type === 'number') {
     if (raw === '' || raw === null || raw === undefined) return null;
     const parsed = Number(raw);
@@ -126,11 +130,26 @@ function getDisplayValue(
 
   const field = config.fields.find((item) => item.key === column);
 
-  if (field?.relation) {
-    const option = relationOptions[field.key]?.find(
-      (item) => String(item.value) === String(value),
-    );
-    return option?.label ?? String(value);
+ if (field?.relation) {
+  // 🔥 SE FOR ARRAY (multiselect)
+  if (Array.isArray(value)) {
+    return value
+      .map((val) => {
+        const option = relationOptions[field.key]?.find(
+          (item) => String(item.value) === String(val),
+        );
+        return option?.label ?? val;
+      })
+      .join(', ');
+  }
+
+  // 🔥 SE FOR VALOR ÚNICO
+  const option = relationOptions[field.key]?.find(
+    (item) => String(item.value) === String(value),
+  );
+
+  return option?.label ?? String(value);
+
   }
 
   if (field?.type === 'select') {
@@ -267,9 +286,11 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
   }, [config.orderBy, config.table, supabase]);
 
   const loadRelationOptions = useCallback(async () => {
-    const relationFields = config.fields.filter(
-      (field) => field.type === 'select' && field.relation,
-    );
+  const relationFields = config.fields.filter(
+  (field) =>
+    (field.type === 'select' || field.type === 'multiselect') &&
+    field.relation,
+);
 
     if (relationFields.length === 0) {
       setRelationOptions({});
@@ -292,21 +313,22 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 
         const { data, error } = await query;
 
-        if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
 
-        nextOptions[field.key] = ((data as RowData[]) ?? []).map((row) => {
-          const primary = row[relation.labelKey ?? 'id'];
-          const secondary = relation.secondaryLabelKey
-            ? row[relation.secondaryLabelKey]
-            : null;
+nextOptions[field.key] = ((data as RowData[]) ?? []).map((row) => {
+  if (relation.table === 'vehicles') {
+    return {
+      value: String(row.id),
+      label: `${row.plate} · ${row.model}`,
+    };
+  }
 
-          return {
-            value: String(row[relation.valueKey ?? 'id']),
-            label: secondary
-              ? `${toLabel(String(primary))} · ${toLabel(String(secondary))}`
-              : toLabel(String(primary)),
-          };
-        });
+  return {
+    value: String(row.id),
+    label: row.name ?? 'Sem nome',
+  };
+});
+
       } catch (err) {
         setError(
           getSupabaseErrorMessage(
@@ -430,6 +452,11 @@ if (config.slug === 'financeiro') {
 
 try {
   const payload = buildPayload();
+if (config.slug === 'multas') {
+  if (payload.due_date && !payload.date) {
+    payload.date = payload.due_date;
+  }
+}
 
   let savedId = editingId;
 
@@ -489,36 +516,77 @@ if (config.slug === 'motoristas' && savedId) {
     }
   }
 
-  async function confirmDelete() {
-    if (!deletingId) return;
 
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
+async function confirmDelete() {
+  if (!deletingId) return;
 
-    try {
-      const { error } = await supabase
-        .from(config.table)
-        .delete()
-        .eq('id', deletingId);
+  setSaving(true);
+  setError(null);
+  setSuccess(null);
 
-      if (error) throw new Error(error.message);
+  try {
+    if (config.slug === 'motoristas') {
+      const { error: vehicleError } = await supabase
+        .from('vehicles')
+        .update({ driver_id: null })
+        .eq('driver_id', deletingId);
 
-      if (editingId === deletingId) {
-        setEditingId(null);
-        resetForm();
-      }
+      if (vehicleError) throw new Error(vehicleError.message);
 
-      setDeletingId(null);
-      setSuccess('Registro excluído com sucesso.');
-      await loadRows();
-      router.refresh();
-    } catch (err) {
-      setError(getSupabaseErrorMessage(err, 'Erro ao excluir o registro.'));
-    } finally {
-      setSaving(false);
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({ driver_id: null })
+        .eq('driver_id', deletingId);
+
+      if (contractError) throw new Error(contractError.message);
+
+      const { error: fineError } = await supabase
+        .from('fines')
+        .update({ driver_id: null })
+        .eq('driver_id', deletingId);
+
+      if (fineError) throw new Error(fineError.message);
+
+      const { error: inspectionError } = await supabase
+        .from('inspections')
+        .update({ driver_id: null })
+        .eq('driver_id', deletingId);
+
+      if (inspectionError) throw new Error(inspectionError.message);
     }
+
+    const { error } = await supabase
+      .from(config.table)
+      .delete()
+      .eq('id', deletingId);
+
+    if (error) throw new Error(error.message);
+
+    if (editingId === deletingId) {
+      setEditingId(null);
+      resetForm();
+    }
+
+    setDeletingId(null);
+    setSuccess('Registro excluído com sucesso.');
+    await loadRows();
+    router.refresh();
+  } catch (err) {
+    setError(getSupabaseErrorMessage(err, 'Erro ao excluir o registro.'));
+  } finally {
+    setSaving(false);
   }
+}
+
+
+
+
+
+
+
+
+
+
 
   function exportRows() {
     const csv = convertRowsToCsv(rows, config.listColumns);
@@ -791,6 +859,7 @@ config.slug === 'socios'
     required={field.required}
     placeholder={field.placeholder}
   />
+
 ) : field.type === 'select' ? (
   <select
     id={field.key}
@@ -810,6 +879,64 @@ config.slug === 'socios'
       </option>
     ))}
   </select>
+
+) : field.type === 'multiselect' ? (
+<div
+  style={{
+    display: 'grid',
+    gap: 8,
+    maxHeight: 160,
+    overflowY: 'auto',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: 10,
+    background: '#fff',
+  }}
+>
+  {(field.relation
+    ? relationOptions[field.key] ?? []
+    : field.options ?? []
+  ).map((option) => {
+    const selectedValues = Array.isArray(form[field.key])
+      ? form[field.key]
+      : [];
+
+    const checked = selectedValues.includes(String(option.value));
+
+    return (
+      <label
+        key={String(option.value)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          cursor: 'pointer',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => {
+            const currentValues = Array.isArray(form[field.key])
+              ? form[field.key]
+              : [];
+
+            const newValues = e.target.checked
+              ? [...currentValues, String(option.value)]
+              : currentValues.filter(
+                  (value: string) => value !== String(option.value)
+                );
+
+            updateField(field, newValues);
+          }}
+        />
+
+        <span>{option.label}</span>
+      </label>
+    );
+  })}
+</div>
+
 ) : field.type === 'checkbox' ? (
   <label
     htmlFor={field.key}

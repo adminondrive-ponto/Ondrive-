@@ -286,7 +286,7 @@ listColumns: ['vehicle_id', 'driver_id', 'concluida', 'date'],
         },
       },
       {
-        key: 'date',
+        key: 'due_date',
         label: 'Data de vencimento',
         type: 'date',
         required: true,
@@ -313,7 +313,7 @@ listColumns: ['vehicle_id', 'driver_id', 'concluida', 'date'],
         type: 'textarea',
       },
     ],
-    listColumns: ['driver_id', 'vehicle_id', 'date', 'amount', 'status'],
+    listColumns: ['driver_id', 'vehicle_id', 'due_date', 'amount', 'status'],
   },
 
 socios: {
@@ -329,7 +329,7 @@ socios: {
     {
       key: 'active_cars',
       label: 'Carros ativos',
-      type: 'select',
+      type: 'multiselect',
       relation: {
         table: 'vehicles',
         valueKey: 'id',

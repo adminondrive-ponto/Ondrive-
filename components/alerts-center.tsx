@@ -10,23 +10,27 @@ type Driver = {
   phone?: string;
   telefone?: string;
   cnh_due_date?: string;
+  cnh_expiry?: string;
 };
 
 type Fine = {
   id: string;
   driver_id?: string;
   due_date?: string;
+  date?: string;
   status?: string;
 };
 
-type FinancialEntry = {
+type Contract = {
   id: string;
-  date?: string;
-  due_date?: string;
   driver_id?: string | null;
-  rent_value?: number | string | null;
-  rental_value?: number | string | null;
+  vehicle_id?: string | null;
+  next_due_date?: string | null;
+  payment_status?: string | null;
   status?: string | null;
+  active?: boolean | null;
+  amount?: number | string | null;
+  rent_value?: number | string | null;
 };
 
 type AlertRow = {
@@ -43,7 +47,7 @@ type AlertRow = {
 };
 
 export function AlertsCenter() {
-   function formatarData(data?: string) {
+  function formatarData(data?: string | null) {
     if (!data) return '';
     const d = new Date(`${data}T00:00:00`);
     return d.toLocaleDateString('pt-BR');
@@ -65,35 +69,109 @@ export function AlertsCenter() {
     const { data: driversData } = await supabase.from('drivers').select('*');
     const { data: finesData } = await supabase.from('fines').select('*');
     const { data: vehiclesData } = await supabase.from('vehicles').select('*');
-    const { data: financialData } = await supabase
-      .from('financial_entries')
-      .select('*');
+    const { data: inspectionsData } = await supabase.from('inspections').select('*');
+    const { data: contractsData } = await supabase.from('contracts').select('*');
 
     const { data: existingAlertsData } = await supabase
       .from('alerts')
-      .select('alert_key, status');
+      .select('alert_key, status, alert_type');
 
     const driversList = (driversData || []) as Driver[];
     const finesList = (finesData || []) as Fine[];
     const vehiclesList = vehiclesData || [];
-    const financialList = (financialData || []) as FinancialEntry[];
+    const inspectionsList = inspectionsData || [];
+    const contractsList = (contractsData || []) as Contract[];
     const existingAlerts = existingAlertsData || [];
 
     setDrivers(driversList);
-
-    const existingKeys = new Set(
-      existingAlerts.map((item) => String(item.alert_key)),
-    );
 
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
     const newAutoAlerts: Partial<AlertRow>[] = [];
 
-    driversList.forEach((driver) => {
-      if (!driver.cnh_due_date) return;
+    async function criarOuAtualizarAlerta({
+      alertKey,
+      diffDias,
+      driverId,
+      phone,
+      warningTitle,
+      warningMessage,
+      dangerTitle,
+      dangerMessage,
+    }: {
+      alertKey: string;
+      diffDias: number;
+      driverId?: string | null;
+      phone?: string | null;
+      warningTitle: string;
+      warningMessage: string;
+      dangerTitle: string;
+      dangerMessage: string;
+    }) {
+      if (diffDias > 3) return;
 
-      const vencimento = new Date(driver.cnh_due_date);
+      const alreadyExists = existingAlerts.find(
+        (a) => a.alert_key === alertKey,
+      );
+
+      if (alreadyExists?.status === 'done') return;
+
+      const novoAlerta =
+        diffDias >= 0
+          ? {
+              level: 'warning' as const,
+              alert_type: warningTitle,
+              title: warningTitle,
+              message: warningMessage,
+            }
+          : {
+              level: 'danger' as const,
+              alert_type: dangerTitle,
+              title: dangerTitle,
+              message: dangerMessage,
+            };
+
+      if (!alreadyExists) {
+        newAutoAlerts.push({
+          alert_key: alertKey,
+          source: 'auto',
+          level: novoAlerta.level,
+          alert_type: novoAlerta.alert_type,
+          title: novoAlerta.title,
+          message: novoAlerta.message,
+          driver_id: driverId || null,
+          phone: phone || null,
+          status: 'active',
+        });
+
+        return;
+      }
+
+      if (
+        alreadyExists.status === 'active' &&
+        alreadyExists.alert_type !== novoAlerta.alert_type
+      ) {
+        await supabase
+          .from('alerts')
+          .update({
+            level: novoAlerta.level,
+            alert_type: novoAlerta.alert_type,
+            title: novoAlerta.title,
+            message: novoAlerta.message,
+            phone: phone || null,
+          })
+          .eq('alert_key', alertKey)
+          .eq('status', 'active');
+      }
+    }
+
+    for (const driver of driversList) {
+      const dataCNH = driver.cnh_due_date || driver.cnh_expiry;
+
+      if (!dataCNH) continue;
+
+      const vencimento = new Date(`${dataCNH}T00:00:00`);
       vencimento.setHours(0, 0, 0, 0);
 
       const diffDias = Math.ceil(
@@ -103,47 +181,31 @@ export function AlertsCenter() {
       const nome = driver.name || driver.nome || 'Motorista';
       const telefone = driver.phone || driver.telefone || null;
 
-      if (diffDias >= 0 && diffDias <= 3) {
-        const alertKey = `cnh-warning-${driver.id}-${driver.cnh_due_date}`;
+      await criarOuAtualizarAlerta({
+        alertKey: `cnh-${driver.id}-${dataCNH}`,
+        diffDias,
+        driverId: driver.id,
+        phone: telefone,
+        warningTitle: 'CNH chegando no vencimento',
+        warningMessage: `Aviso: a CNH de ${nome} vence em ${diffDias} dia(s).`,
+        dangerTitle: 'CNH vencida',
+        dangerMessage: `Vencido: a CNH de ${nome} está vencida.`,
+      });
+    }
 
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'warning',
-            alert_type: 'CNH chegando no vencimento',
-            title: 'CNH chegando no vencimento',
-            message: `Aviso: a CNH de ${nome} vence em ${diffDias} dia(s). Regularize antes da data limite.`,
-            driver_id: driver.id,
-            phone: telefone,
-            status: 'active',
-          });
-        }
+    for (const fine of finesList) {
+      const dataMulta = fine.due_date || fine.date;
+
+      if (
+        !dataMulta ||
+        ['paid', 'paga', 'pago', 'quitada', 'quitado'].includes(
+          String(fine.status ?? '').toLowerCase(),
+        )
+      ) {
+        continue;
       }
 
-      if (diffDias < 0) {
-        const alertKey = `cnh-danger-${driver.id}-${driver.cnh_due_date}`;
-
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'danger',
-            alert_type: 'CNH vencida',
-            title: 'CNH vencida',
-            message: `Vencido: a CNH de ${nome} está vencida. Regularize o quanto antes.`,
-            driver_id: driver.id,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
-    });
-
-    finesList.forEach((fine) => {
-      if (!fine.due_date || fine.status === 'paid') return;
-
-      const vencimento = new Date(fine.due_date);
+      const vencimento = new Date(`${dataMulta}T00:00:00`);
       vencimento.setHours(0, 0, 0, 0);
 
       const diffDias = Math.ceil(
@@ -157,103 +219,71 @@ export function AlertsCenter() {
       const nome = driver?.name || driver?.nome || 'motorista';
       const telefone = driver?.phone || driver?.telefone || null;
 
-      if (diffDias >= 0 && diffDias <= 3) {
-        const alertKey = `fine-warning-${fine.id}-${fine.due_date}`;
+      await criarOuAtualizarAlerta({
+        alertKey: `fine-${fine.id}-${dataMulta}`,
+        diffDias,
+        driverId: fine.driver_id || null,
+        phone: telefone,
+        warningTitle: 'Multa chegando no vencimento',
+        warningMessage: `Aviso: existe uma multa de ${nome} vencendo em ${diffDias} dia(s). Verifique o pagamento.`,
+        dangerTitle: 'Multa vencida',
+        dangerMessage: `Vencido: existe uma multa de ${nome} atrasada. Regularize o quanto antes.`,
+      });
+    }
 
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'warning',
-            alert_type: 'Multa chegando no vencimento',
-            title: 'Multa chegando no vencimento',
-            message: `Aviso: existe uma multa de ${nome} vencendo em ${diffDias} dia(s). Verifique o pagamento.`,
-            driver_id: fine.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
+    for (const vistoria of inspectionsList as any[]) {
+      const dataVistoria =
+        vistoria.date ||
+        vistoria.due_date ||
+        vistoria.inspection_due_date ||
+        vistoria.next_revision;
 
-      if (diffDias < 0) {
-        const alertKey = `fine-danger-${fine.id}-${fine.due_date}`;
+      if (!dataVistoria) continue;
 
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'danger',
-            alert_type: 'Multa vencida',
-            title: 'Multa vencida',
-            message: `Vencido: existe uma multa de ${nome} atrasada. Regularize o quanto antes.`,
-            driver_id: fine.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
-    });
-
-    vehiclesList.forEach((vehicle: any) => {
-      if (!vehicle.next_revision) return;
-
-      const vencimento = new Date(vehicle.next_revision);
+      const vencimento = new Date(`${dataVistoria}T00:00:00`);
       vencimento.setHours(0, 0, 0, 0);
 
       const diffDias = Math.ceil(
         (vencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
       );
 
+      const vehicle = vehiclesList.find(
+        (v: any) => String(v.id) === String(vistoria.vehicle_id),
+      );
+
       const driver = driversList.find(
-        (item) => String(item.id) === String(vehicle.driver_id),
+        (d: any) => String(d.id) === String(vistoria.driver_id),
       );
 
       const telefone = driver?.phone || driver?.telefone || null;
-      const placa = vehicle.plate || 'sem placa';
+      const placa = vehicle?.plate || 'sem placa';
 
-      if (diffDias >= 0 && diffDias <= 3) {
-        const alertKey = `vistoria-warning-${vehicle.id}-${vehicle.next_revision}`;
+      await criarOuAtualizarAlerta({
+        alertKey: `vistoria-${vistoria.id}-${dataVistoria}`,
+        diffDias,
+        driverId: vistoria.driver_id || null,
+        phone: telefone,
+        warningTitle: 'Vistoria próxima do vencimento',
+        warningMessage: `Aviso: a vistoria do veículo ${placa} vence em ${diffDias} dia(s).`,
+        dangerTitle: 'Vistoria vencida',
+        dangerMessage: `Vencido: a vistoria do veículo ${placa} está atrasada.`,
+      });
+    }
 
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'warning',
-            alert_type: 'Vistoria próxima do vencimento',
-            title: 'Vistoria próxima do vencimento',
-            message: `Aviso: a vistoria do veículo ${placa} vence em ${diffDias} dia(s).`,
-            driver_id: vehicle.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
+    for (const contract of contractsList) {
+      if (!contract.next_due_date) continue;
+
+      if (contract.active === false) continue;
+
+      if (
+        ['paid', 'paga', 'pago', 'quitada', 'quitado'].includes(
+          String(contract.payment_status ?? contract.status ?? '').toLowerCase(),
+        )
+      ) {
+        continue;
       }
 
-      if (diffDias < 0) {
-        const alertKey = `vistoria-danger-${vehicle.id}-${vehicle.next_revision}`;
-
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'danger',
-            alert_type: 'Vistoria vencida',
-            title: 'Vistoria vencida',
-            message: `Vencido: a vistoria do veículo ${placa} está atrasada.`,
-            driver_id: vehicle.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
-    });
-
-        financialList.forEach((entry) => {
-      const rentValue = Number(entry.rent_value ?? entry.rental_value ?? 0);
-
-      if (!entry.due_date || rentValue <= 0) return;
-
-      const vencimento = new Date(entry.due_date);
+      const vencimento = new Date(`${contract.next_due_date}T00:00:00`);
       vencimento.setHours(0, 0, 0, 0);
 
       const diffDias = Math.ceil(
@@ -261,49 +291,24 @@ export function AlertsCenter() {
       );
 
       const driver = driversList.find(
-        (item) => String(item.id) === String(entry.driver_id),
+        (item) => String(item.id) === String(contract.driver_id),
       );
 
       const nome = driver?.name || driver?.nome || 'motorista';
       const telefone = driver?.phone || driver?.telefone || null;
+      const valor = Number(contract.rent_value ?? contract.amount ?? 0);
 
-      if (diffDias >= 0 && diffDias <= 3) {
-        const alertKey = `rent-warning-${entry.id}-${entry.due_date}`;
-
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'warning',
-            alert_type: 'Aluguel chegando no vencimento',
-            title: 'Aluguel chegando no vencimento',
-            message: `Aviso: o aluguel de ${nome} vence em ${diffDias} dia(s), considerando a data de vencimento cadastrada no financeiro (${formatarData(entry.due_date)}). Valor: R$ ${rentValue.toFixed(2)}.`,
-            driver_id: entry.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
-
-      if (diffDias < 0) {
-        const alertKey = `rent-danger-${entry.id}-${entry.due_date}`;
-
-        if (!existingKeys.has(alertKey)) {
-          newAutoAlerts.push({
-            alert_key: alertKey,
-            source: 'auto',
-            level: 'danger',
-            alert_type: 'Aluguel vencido',
-            title: 'Aluguel vencido',
-            message: `Vencido: o aluguel de ${nome} está atrasado, considerando a data de vencimento cadastrada no financeiro (${formatarData(entry.due_date)}). Valor: R$ ${rentValue.toFixed(2)}.`,
-            driver_id: entry.driver_id || null,
-            phone: telefone,
-            status: 'active',
-          });
-        }
-      }
-    });
-
+      await criarOuAtualizarAlerta({
+        alertKey: `payment-${contract.id}-${contract.next_due_date}`,
+        diffDias,
+        driverId: contract.driver_id || null,
+        phone: telefone,
+        warningTitle: 'Pagamento chegando no vencimento',
+        warningMessage: `Aviso: o pagamento de ${nome} vence em ${diffDias} dia(s), na data ${formatarData(contract.next_due_date)}.${valor > 0 ? ` Valor: R$ ${valor.toFixed(2)}.` : ''}`,
+        dangerTitle: 'Pagamento vencido',
+        dangerMessage: `Vencido: o pagamento de ${nome} está atrasado desde ${formatarData(contract.next_due_date)}.${valor > 0 ? ` Valor: R$ ${valor.toFixed(2)}.` : ''}`,
+      });
+    }
 
     if (newAutoAlerts.length > 0) {
       await supabase.from('alerts').insert(newAutoAlerts);
@@ -320,6 +325,12 @@ export function AlertsCenter() {
 
   useEffect(() => {
     carregarDados();
+
+    const interval = setInterval(() => {
+      carregarDados();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const templates = [
@@ -416,7 +427,6 @@ export function AlertsCenter() {
 
     setAlerts((prev) => prev.filter((item) => item.id !== alerta.id));
   }
-  
 
   function abrirWhatsApp() {
     const cleanPhone = phone.replace(/\D/g, '');
