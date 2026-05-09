@@ -58,8 +58,8 @@ export default function Sidebar() {
             padding: '10px',
             borderRadius: '8px',
             border: 'none',
-            background: '#fff',
-            color: '#000',
+            background: '#30363d',
+            color: '#ffffff',
             cursor: 'pointer',
           }}
           onClick={() => {

@@ -295,7 +295,7 @@ ${realContext}`,
                 key={`${msg.role}-${index}`}
                 className="card"
                 style={{
-                  background: msg.role === 'assistant' ? '#f8fafc' : '#eff6ff',
+                  background: '#1c2128',
                   boxShadow: 'none',
                 }}
               >
