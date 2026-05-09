@@ -961,7 +961,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
           {config.slug === 'financeiro' &&
           Number(form.rent_value ?? 0) > 0 &&
           Number(form.expense_value ?? 0) > Number(form.rent_value ?? 0) ? (
-            <div className="alert" style={{ background: '#fee2e2', color: '#991b1b' }}>
+            <div className="alert" style={{ background: 'rgba(248,81,73,0.12)', color: '#fca5a5' }}>
               ⚠️ Atenção: essa operação está com prejuízo (despesa maior que o aluguel)
             </div>
           ) : null}
@@ -1030,10 +1030,10 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                       gap: 8,
                       maxHeight: 160,
                       overflowY: 'auto',
-                      border: '1px solid var(--border)',
+                      border: '1px solid #30363d',
                       borderRadius: 10,
                       padding: 10,
-                      background: '#fff',
+                      background: '#1c2128',
                     }}
                   >
                     {(field.relation
@@ -1085,7 +1085,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                     style={{
                       minHeight: 52,
                       width: '100%',
-                      border: '1px solid var(--border)',
+                      border: '1px solid #30363d',
                       borderRadius: 10,
                       display: 'flex',
                       alignItems: 'center',
@@ -1093,7 +1093,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                       gap: 10,
                       cursor: 'pointer',
                       fontSize: 16,
-                      background: '#fff',
+                      background: '#1c2128',
                     }}
                   >
                     <input
@@ -1153,9 +1153,9 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                       onClick={() => void convertAddressToCoordinates()}
                       disabled={saving}
                       style={{
-                        background: '#1e3a8a',
+                        background: '#f0a732',
                         border: 'none',
-                        color: '#ffffff',
+                        color: '#0d1117',
                         fontWeight: 700,
                         cursor: 'pointer',
                         borderRadius: 8,
@@ -1226,8 +1226,8 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                 marginBottom: 20,
                 padding: '12px 16px',
                 borderRadius: 12,
-                background: '#f8fafc',
-                border: '1px solid #e5e7eb',
+                background: '#1c2128',
+                border: '1px solid #30363d',
               }}
             >
               <div>
@@ -1239,7 +1239,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 
               <button
                 style={{
-                  background: '#2563eb',
+                  background: '#f0a732',
                   color: '#fff',
                   border: 'none',
                   padding: '10px 16px',
@@ -1303,10 +1303,10 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
           <div
             className="table-wrap"
             style={{
-              border: '1px solid #e5e7eb',
+              border: '1px solid #30363d',
               borderRadius: 12,
               overflow: 'hidden',
-              background: '#fff',
+              background: '#1c2128',
             }}
           >
             <div style={{ display: 'grid', gap: 16, padding: 12 }}>
@@ -1324,10 +1324,10 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                   <div
                     key={String(row.id)}
                     style={{
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid #30363d',
                       borderRadius: 12,
                       padding: 16,
-                      background: '#fff',
+                      background: '#1c2128',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -1364,7 +1364,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
                           display: 'flex',
                           flexWrap: 'wrap',
                           gap: '10px 16px',
-                          color: '#6b7280',
+                          color: '#8b949e',
                           fontSize: 13,
                         }}
                       >

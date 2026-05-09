@@ -46,26 +46,16 @@ export async function FinancialDashboard() {
   const contracts = ((contractsData ?? []) as ContractRow[]).filter(isActiveContract);
   const financialRows = (financialData ?? []) as FinanceRow[];
 
-  const contractRevenue = contracts.reduce(
-    (sum, item) => sum + toNumber(item.rent_value),
-    0,
-  );
+  const contractRevenue = contracts.reduce((sum, item) => sum + toNumber(item.rent_value), 0);
 
   const manualRevenue = financialRows.reduce((sum, item) => {
     const rentValue = toNumber(item.rent_value);
     const expenseValue = toNumber(item.expense_value);
-
-    if (expenseValue > 0) {
-      return sum;
-    }
-
+    if (expenseValue > 0) return sum;
     return sum + rentValue;
   }, 0);
 
-  const expense = financialRows.reduce(
-    (sum, item) => sum + toNumber(item.expense_value),
-    0,
-  );
+  const expense = financialRows.reduce((sum, item) => sum + toNumber(item.expense_value), 0);
 
   const revenue = contractRevenue + manualRevenue;
   const result = revenue - expense;
@@ -96,61 +86,42 @@ export async function FinancialDashboard() {
 
   return (
     <div>
-      <section
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 20,
-        }}
-      >
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
         <div className="card">
-          <h3>Entradas</h3>
-          <strong>{formatMoney(revenue)}</strong>
+          <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Entradas</h3>
+          <strong style={{ fontSize: 24, color: '#3b82f6' }}>{formatMoney(revenue)}</strong>
         </div>
 
         <div className="card">
-          <h3>Despesas</h3>
-          <strong>{formatMoney(expense)}</strong>
+          <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Despesas</h3>
+          <strong style={{ fontSize: 24, color: '#f85149' }}>{formatMoney(expense)}</strong>
         </div>
 
-        <div
-          className="card"
-          style={{
-            background: result < 0 ? '#fee2e2' : '#ecfdf5',
-            color: result < 0 ? '#991b1b' : '#065f46',
-          }}
-        >
-          <h3>Resultado</h3>
-          <strong>{formatMoney(result)}</strong>
+        <div className="card" style={{ borderLeft: `4px solid ${result < 0 ? '#f85149' : '#3fb950'}` }}>
+          <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Resultado</h3>
+          <strong style={{ fontSize: 24, color: result < 0 ? '#f85149' : '#3fb950' }}>
+            {formatMoney(result)}
+          </strong>
         </div>
 
         <div className="card">
-          <h3>Repasse sócios</h3>
-          <strong>{formatMoney(repasseSocio)}</strong>
+          <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Repasse sócios</h3>
+          <strong style={{ fontSize: 24, color: '#f0a732' }}>{formatMoney(repasseSocio)}</strong>
         </div>
       </section>
 
       <section className="card" style={{ marginBottom: 20 }}>
-        <h2>Previsão de entrada</h2>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 16,
-          }}
-        >
+        <h2 style={{ color: '#ffffff', margin: '0 0 16px' }}>Previsão de entrada</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           {forecast.map((item) => (
             <div className="card" key={item.days}>
-              <h3>Próximos {item.days} dias</h3>
-              <strong>{formatMoney(item.value)}</strong>
+              <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Próximos {item.days} dias</h3>
+              <strong style={{ fontSize: 20, color: '#f0a732' }}>{formatMoney(item.value)}</strong>
             </div>
           ))}
-
           <div className="card">
-            <h3>Repasse ADM</h3>
-            <strong>{formatMoney(repasseAdm)}</strong>
+            <h3 style={{ color: '#8b949e', margin: '0 0 6px' }}>Repasse ADM</h3>
+            <strong style={{ fontSize: 20, color: '#f0a732' }}>{formatMoney(repasseAdm)}</strong>
           </div>
         </div>
       </section>
