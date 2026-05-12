@@ -187,28 +187,6 @@ function getDisplayValue(
   return toLabel(String(value));
 }
 
-function convertRowsToCsv(
-  rows: RowData[],
-  columns: string[],
-  fields: CrudModuleConfig['fields'],
-) {
-  const getColumnLabel = (column: string) => {
-    const field = fields.find((item) => item.key === column);
-    return field?.label ?? column;
-  };
-
-  const header = columns
-    .map((column) => `"${getColumnLabel(column).replace(/"/g, '""')}"`)
-    .join(';');
-
-  const body = rows.map((row) =>
-    columns
-      .map((column) => `"${String(row[column] ?? '').replace(/"/g, '""')}"`)
-      .join(';'),
-  );
-
-  return [header, ...body].join('\n');
-}
 
 function parseCsv(text: string) {
   const lines = text.split(/\r?\n/).filter(Boolean);
@@ -1109,6 +1087,7 @@ setSuccess('Registro salvo com sucesso.');
         config.slug === 'motoristas' ||
         config.slug === 'vistorias' ||
         config.slug === 'multas' ||
+        config.slug === 'pagamentos' ||
         config.slug === 'socios' ||
         config.slug === 'contratos'
           ? {
