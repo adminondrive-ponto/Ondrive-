@@ -501,7 +501,11 @@ if (config.slug === 'pagamentos') {
   if (!precisouRecuperar) {
     payload.recovery_date = null;
     payload.recovery_reason = null;
-    payload.recovery_status = null;
+
+    // Quando não houve recuperação, o status correto é "Não acionada".
+    // Isso evita erro de check constraint no banco.
+    payload.recovery_status = 'nao_acionada';
+
     payload.tow_value = 0;
     payload.tow_driver_value = 0;
     payload.tow_admin_value = 0;
