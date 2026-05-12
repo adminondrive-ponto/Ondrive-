@@ -507,7 +507,11 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 }
 
 async function createFinancialEntryFromRelatedModule(payload: PayloadData) {
-  if (config.slug !== 'vistorias' && config.slug !== 'multas') return;
+  if (
+  config.slug !== 'vistorias' &&
+  config.slug !== 'multas' &&
+  config.slug !== 'pagamentos'
+) return;
 
   let financialPayload: PayloadData | null = null;
   let investorId: string | null = null;
@@ -570,7 +574,87 @@ async function createFinancialEntryFromRelatedModule(payload: PayloadData) {
       amount: valorMulta,
     };
   }
+  if (config.slug === 'pagamentos') {
+    const valorPago = Number(payload.amount_paid ?? 0);
+    const multaAtraso = Number(payload.late_fee_value ?? 0);
+    const valorGuincho = Number(payload.tow_value ?? 0);
 
+    const dataLancamento =
+      payload.paid_date ?? payload.due_date ?? new Date().toISOString().slice(0, 10);
+
+    const financialEntries: PayloadData[] = [];
+
+    if (valorPago > 0) {
+      financialEntries.push({
+        date: dataLancamento,
+        vehicle_id: payload.vehicle_id,
+        driver_id: payload.driver_id,
+        investor_id: payload.investor_id ?? investorId,
+        expense_type: null,
+        expense_value: null,
+        rent_value: valorPago,
+        adm_fee: null,
+        repasse_value: null,
+        description: 'Pagamento recebido do motorista',
+        type: 'income',
+        amount: valorPago,
+      });
+    }
+
+    if (multaAtraso > 0) {
+      financialEntries.push({
+        date: dataLancamento,
+        vehicle_id: payload.vehicle_id,
+        driver_id: payload.driver_id,
+        investor_id: payload.investor_id ?? investorId,
+        expense_type: null,
+        expense_value: null,
+        rent_value: multaAtraso,
+        adm_fee: null,
+        repasse_value: null,
+        description: 'Multa por atraso recebida do motorista',
+        type: 'income',
+        amount: multaAtraso,
+      });
+    }
+
+    if (valorGuincho > 0) {
+      const parteMotorista = Number(payload.tow_driver_value ?? valorGuincho * 0.5);
+      const parteAdm = Number(
+        payload.tow_admin_value ??
+          (payload.investor_id || investorId ? valorGuincho * 0.25 : valorGuincho * 0.5),
+      );
+      const parteSocio = Number(
+        payload.tow_investor_value ??
+          (payload.investor_id || investorId ? valorGuincho * 0.25 : 0),
+      );
+
+      financialEntries.push({
+        date: dataLancamento,
+        vehicle_id: payload.vehicle_id,
+        driver_id: payload.driver_id,
+        investor_id: payload.investor_id ?? investorId,
+        expense_type: 'outros',
+        expense_value: valorGuincho,
+        rent_value: null,
+        adm_fee: null,
+        repasse_value: null,
+        description: `Guincho / recuperação de veículo. Motorista: ${parteMotorista}. ADM: ${parteAdm}. Sócio: ${parteSocio}.`,
+        type: 'expense',
+        amount: valorGuincho,
+      });
+    }
+
+    if (financialEntries.length === 0) return;
+
+    const { error } = await supabase
+      .from('financial_entries')
+      .insert(financialEntries);
+
+    if (error) throw new Error(error.message);
+
+    return;
+  }
   if (!financialPayload) return;
 
   const { error } = await supabase
