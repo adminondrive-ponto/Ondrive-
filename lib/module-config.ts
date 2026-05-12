@@ -183,10 +183,11 @@ export const moduleConfigs = {
           orderBy: { column: 'name', ascending: true },
         },
       },
-      { key: 'date', label: 'Data da vistoria', type: 'date', required: true },
-      { key: 'km', label: 'KM atual', type: 'number' },
-      { key: 'observations', label: 'Serviços realizados / Observações', type: 'textarea' },
-      { key: 'next_revision_date', label: 'Data da próxima revisão', type: 'date' },
+     { key: 'date', label: 'Data da vistoria', type: 'date', required: true },
+{ key: 'km', label: 'KM atual', type: 'number' },
+{ key: 'valor_gasto', label: 'Valor gasto', type: 'number' },
+{ key: 'observations', label: 'Serviços realizados / Observações', type: 'textarea' },
+{ key: 'next_revision_date', label: 'Data da próxima revisão', type: 'date' },
       {
         key: 'concluida',
         label: 'Status da vistoria',
@@ -197,7 +198,16 @@ export const moduleConfigs = {
         ],
       },
     ],
-    listColumns: ['date', 'vehicle_id', 'driver_id', 'km', 'observations', 'next_revision_date', 'concluida'],
+listColumns: [
+  'date',
+  'vehicle_id',
+  'driver_id',
+  'km',
+  'valor_gasto',
+  'observations',
+  'next_revision_date',
+  'concluida',
+],
   },
 
   multas: {
