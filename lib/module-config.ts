@@ -11,6 +11,7 @@ export const menuItems = [
   { label: 'Contratos', href: '/contratos' },
   { label: 'Vistorias', href: '/vistorias' },
   { label: 'Multas', href: '/multas' },
+  { label: 'Rastreamento', href: '/rastreamento' },
   { label: 'IAdrive', href: '/copiloto' },
 ];
 
