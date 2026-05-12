@@ -17,26 +17,75 @@ function isActiveContract(contract: any) {
   );
 }
 
+function getPaymentValue(row: any) {
+  return (
+    toNumber(row.amount_paid) ||
+    toNumber(row.paid_value) ||
+    toNumber(row.valor_pago) ||
+    toNumber(row.total_charged) ||
+    toNumber(row.rent_value) ||
+    0
+  );
+}
+
+function getRecoveryExpense(row: any) {
+  return (
+    toNumber(row.tow_total_value) ||
+    toNumber(row.guicho_total_value) ||
+    toNumber(row.total_tow_value) ||
+    toNumber(row.recovery_total_value) ||
+    0
+  );
+}
+
 export async function FinancialDashboard() {
   noStore();
 
   const supabase = await createSupabaseServerClient();
 
-  const [contractsRes, financialRes, vehiclesRes, investorsRes] = await Promise.all([
+  const [
+    contractsRes,
+    financialRes,
+    paymentRecordsRes,
+    vehiclesRes,
+    investorsRes,
+  ] = await Promise.all([
     supabase.from('contracts').select('*'),
     supabase.from('financial_entries').select('*'),
+    supabase.from('payment_records').select('*'),
     supabase.from('vehicles').select('id, plate, model, brand'),
     supabase.from('investors').select('id, name'),
   ]);
 
   const contracts = (contractsRes.data ?? []).filter(isActiveContract);
   const financialRows = financialRes.data ?? [];
+  const paymentRows = paymentRecordsRes.data ?? [];
   const vehicles = vehiclesRes.data ?? [];
   const investors = investorsRes.data ?? [];
 
   // ── Totais gerais ──
-  const totalEntradas = financialRows.reduce((s: number, r: any) => s + toNumber(r.rent_value), 0);
-  const totalDespesas = financialRows.reduce((s: number, r: any) => s + toNumber(r.expense_value), 0);
+  const entradasFinanceiro = financialRows.reduce(
+    (s: number, r: any) => s + toNumber(r.rent_value),
+    0
+  );
+
+  const entradasPagamentos = paymentRows.reduce(
+    (s: number, r: any) => s + getPaymentValue(r),
+    0
+  );
+
+  const despesasFinanceiro = financialRows.reduce(
+    (s: number, r: any) => s + toNumber(r.expense_value),
+    0
+  );
+
+  const despesasRecuperacao = paymentRows.reduce(
+    (s: number, r: any) => s + getRecoveryExpense(r),
+    0
+  );
+
+  const totalEntradas = entradasFinanceiro + entradasPagamentos;
+  const totalDespesas = despesasFinanceiro + despesasRecuperacao;
   const resultado = totalEntradas - totalDespesas;
 
   const repasseSocioTotal = contracts.reduce((s: number, c: any) => {
@@ -47,8 +96,12 @@ export async function FinancialDashboard() {
     return s + toNumber(c.rent_value) * (toNumber(c.adm_repasse_value) / 100);
   }, 0);
 
-  // ── Previsão de caixa (baseada nos contratos ativos) ──
-  const receitaMensalContratos = contracts.reduce((s: number, c: any) => s + toNumber(c.rent_value), 0);
+  // ── Previsão de caixa baseada nos contratos ativos ──
+  const receitaMensalContratos = contracts.reduce(
+    (s: number, c: any) => s + toNumber(c.rent_value),
+    0
+  );
+
   const forecast = [
     { label: '30 dias', value: receitaMensalContratos },
     { label: '60 dias', value: receitaMensalContratos * 2 },
@@ -56,68 +109,107 @@ export async function FinancialDashboard() {
   ];
 
   // ── Breakdown por veículo ──
-  const vehicleBreakdown = vehicles.map((v: any) => {
-    const vContracts = contracts.filter((c: any) => String(c.vehicle_id) === String(v.id));
-    const vFinancial = financialRows.filter((r: any) => String(r.vehicle_id) === String(v.id));
+  const vehicleBreakdown = vehicles
+    .map((v: any) => {
+      const vContracts = contracts.filter(
+        (c: any) => String(c.vehicle_id) === String(v.id)
+      );
 
-    const aluguel = vContracts.reduce((s: number, c: any) => s + toNumber(c.rent_value), 0);
-    const despesas = vFinancial.reduce((s: number, r: any) => s + toNumber(r.expense_value), 0);
-    const repasseSocio = vContracts.reduce((s: number, c: any) => {
-      return s + toNumber(c.rent_value) * (toNumber(c.repasse_value) / 100);
-    }, 0);
-    const repasseAdm = vContracts.reduce((s: number, c: any) => {
-      return s + toNumber(c.rent_value) * (toNumber(c.adm_repasse_value) / 100);
-    }, 0);
-    const saldo = aluguel - despesas - repasseSocio - repasseAdm;
+      const vFinancial = financialRows.filter(
+        (r: any) => String(r.vehicle_id) === String(v.id)
+      );
 
-    const investorId = vContracts[0]?.investor_id;
-    const investor = investors.find((i: any) => String(i.id) === String(investorId));
+      const vPayments = paymentRows.filter(
+        (r: any) => String(r.vehicle_id) === String(v.id)
+      );
 
-    return {
-      id: v.id,
-      label: `${v.plate} · ${v.model}`,
-      aluguel,
-      despesas,
-      repasseSocio,
-      repasseAdm,
-      saldo,
-      socio: investor?.name ?? null,
-    };
-  }).filter((v: any) => v.aluguel > 0 || v.despesas > 0);
+      const aluguelContratos = vContracts.reduce(
+        (s: number, c: any) => s + toNumber(c.rent_value),
+        0
+      );
+
+      const aluguelRecebido = vPayments.reduce(
+        (s: number, r: any) => s + getPaymentValue(r),
+        0
+      );
+
+      const despesasFinanceiroVeiculo = vFinancial.reduce(
+        (s: number, r: any) => s + toNumber(r.expense_value),
+        0
+      );
+
+      const despesasRecuperacaoVeiculo = vPayments.reduce(
+        (s: number, r: any) => s + getRecoveryExpense(r),
+        0
+      );
+
+      const despesas = despesasFinanceiroVeiculo + despesasRecuperacaoVeiculo;
+
+      const repasseSocio = vContracts.reduce((s: number, c: any) => {
+        return s + toNumber(c.rent_value) * (toNumber(c.repasse_value) / 100);
+      }, 0);
+
+      const repasseAdm = vContracts.reduce((s: number, c: any) => {
+        return s + toNumber(c.rent_value) * (toNumber(c.adm_repasse_value) / 100);
+      }, 0);
+
+      const aluguel = aluguelRecebido || aluguelContratos;
+      const saldo = aluguel - despesas - repasseSocio - repasseAdm;
+
+      const investorId = vContracts[0]?.investor_id;
+      const investor = investors.find(
+        (i: any) => String(i.id) === String(investorId)
+      );
+
+      return {
+        id: v.id,
+        label: `${v.plate} · ${v.model}`,
+        aluguel,
+        despesas,
+        repasseSocio,
+        repasseAdm,
+        saldo,
+        socio: investor?.name ?? null,
+      };
+    })
+    .filter((v: any) => v.aluguel > 0 || v.despesas > 0);
 
   return (
     <div>
-      {/* ── KPIs gerais ── */}
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
         <div className="card">
           <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>Entradas</h3>
           <strong style={{ fontSize: 24, color: '#3b82f6' }}>{formatMoney(totalEntradas)}</strong>
         </div>
+
         <div className="card">
           <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>Despesas</h3>
           <strong style={{ fontSize: 24, color: '#f85149' }}>{formatMoney(totalDespesas)}</strong>
         </div>
+
         <div className="card" style={{ borderLeft: `4px solid ${resultado < 0 ? '#f85149' : '#3fb950'}` }}>
           <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>Resultado</h3>
           <strong style={{ fontSize: 24, color: resultado < 0 ? '#f85149' : '#3fb950' }}>
             {formatMoney(resultado)}
           </strong>
         </div>
+
         <div className="card">
           <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>Repasse sócios</h3>
           <strong style={{ fontSize: 24, color: '#f0a732' }}>{formatMoney(repasseSocioTotal)}</strong>
         </div>
       </section>
 
-      {/* ── Repasse ADM + Previsão de caixa ── */}
       <section className="card" style={{ marginBottom: 20 }}>
         <h2 style={{ color: '#ffffff', margin: '0 0 16px', fontSize: 16 }}>📊 Previsão de caixa — contratos ativos</h2>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           <div className="card" style={{ background: '#1c2128' }}>
             <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>Repasse ADM</h3>
             <strong style={{ fontSize: 20, color: '#f0a732' }}>{formatMoney(repasseAdmTotal)}</strong>
             <p style={{ color: '#8b949e', fontSize: 11, margin: '4px 0 0' }}>por mês</p>
           </div>
+
           {forecast.map((item) => (
             <div className="card" key={item.label} style={{ background: '#1c2128' }}>
               <h3 style={{ color: '#8b949e', margin: '0 0 6px', fontSize: 12, textTransform: 'uppercase' }}>
@@ -130,18 +222,21 @@ export async function FinancialDashboard() {
         </div>
       </section>
 
-      {/* ── Breakdown por veículo ── */}
       {vehicleBreakdown.length > 0 && (
         <section className="card" style={{ marginBottom: 20 }}>
           <h2 style={{ color: '#ffffff', margin: '0 0 16px', fontSize: 16 }}>🚗 Resultado por veículo</h2>
+
           <div style={{ display: 'grid', gap: 12 }}>
             {vehicleBreakdown.map((v: any) => (
-              <div key={v.id} style={{
-                background: '#1c2128',
-                border: '1px solid #30363d',
-                borderRadius: 12,
-                padding: 16,
-              }}>
+              <div
+                key={v.id}
+                style={{
+                  background: '#1c2128',
+                  border: '1px solid #30363d',
+                  borderRadius: 12,
+                  padding: 16,
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <div>
                     <strong style={{ color: '#ffffff', fontSize: 15 }}>{v.label}</strong>
@@ -151,31 +246,38 @@ export async function FinancialDashboard() {
                       </span>
                     )}
                   </div>
-                  <span style={{
-                    padding: '4px 12px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    background: v.saldo < 0 ? 'rgba(248,81,73,0.15)' : 'rgba(63,185,80,0.15)',
-                    color: v.saldo < 0 ? '#f85149' : '#3fb950',
-                    border: `1px solid ${v.saldo < 0 ? '#f85149' : '#3fb950'}`,
-                  }}>
+
+                  <span
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      background: v.saldo < 0 ? 'rgba(248,81,73,0.15)' : 'rgba(63,185,80,0.15)',
+                      color: v.saldo < 0 ? '#f85149' : '#3fb950',
+                      border: `1px solid ${v.saldo < 0 ? '#f85149' : '#3fb950'}`,
+                    }}
+                  >
                     Saldo: {formatMoney(v.saldo)}
                   </span>
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 2 }}>Aluguel recebido</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#3b82f6' }}>{formatMoney(v.aluguel)}</div>
                   </div>
+
                   <div>
                     <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 2 }}>Despesas</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#f85149' }}>{formatMoney(v.despesas)}</div>
                   </div>
+
                   <div>
                     <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 2 }}>Repasse sócio</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#f0a732' }}>{formatMoney(v.repasseSocio)}</div>
                   </div>
+
                   <div>
                     <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 2 }}>Repasse ADM</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#f0a732' }}>{formatMoney(v.repasseAdm)}</div>
@@ -187,8 +289,7 @@ export async function FinancialDashboard() {
         </section>
       )}
 
-      {/* ── Lançamentos financeiros ── */}
-      <ModuleCrud config={moduleConfigs.financeiro} />
+      <ModuleCrud config={moduleConfigs.pagamentos} />
     </div>
   );
 }
