@@ -234,8 +234,26 @@ function applyFinancialRules(payload: PayloadData) {
 
 
 function getRequiredFieldMessage(config: CrudModuleConfig, form: FormState) {
+  const recoveryFields = [
+    'recovery_date',
+    'recovery_reason',
+    'recovery_status',
+    'tow_value',
+    'tow_driver_value',
+    'tow_admin_value',
+    'tow_investor_value',
+  ];
+
   const requiredField = config.fields.find((field) => {
     if (!field.required) return false;
+
+    if (
+      config.slug === 'pagamentos' &&
+      !Boolean(form.vehicle_recovery_needed) &&
+      recoveryFields.includes(field.key)
+    ) {
+      return false;
+    }
 
     const value = form[field.key];
 
@@ -472,14 +490,28 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
   });
 
   Object.keys(payload).forEach((key) => {
-    if (Array.isArray(payload[key])) {
-      payload[key] = payload[key].filter(Boolean);
-    }
-  });
-
-  if (config.table === 'financial_entries') {
-    return applyFinancialRules(payload);
+  if (Array.isArray(payload[key])) {
+    payload[key] = payload[key].filter(Boolean);
   }
+});
+
+if (config.slug === 'pagamentos') {
+  const precisouRecuperar = Boolean(payload.vehicle_recovery_needed);
+
+  if (!precisouRecuperar) {
+    payload.recovery_date = null;
+    payload.recovery_reason = null;
+    payload.recovery_status = null;
+    payload.tow_value = 0;
+    payload.tow_driver_value = 0;
+    payload.tow_admin_value = 0;
+    payload.tow_investor_value = 0;
+  }
+}
+
+if (config.table === 'financial_entries') {
+  return applyFinancialRules(payload);
+}
 
   return payload;
 }
