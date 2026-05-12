@@ -1,6 +1,5 @@
-import { ModuleCrud } from '@/components/module-crud';
-import { moduleConfigs } from '@/lib/module-config';
+import { ModulePage } from '@/components/module-page';
 
-export default function PagamentosPage() {
-  return <ModuleCrud config={moduleConfigs.pagamentos} />;
+export default async function Page() {
+  return ModulePage({ slug: 'pagamentos', pathname: '/pagamentos' });
 }
