@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import type { CrudModuleConfig, ModuleField, ModuleOption } from '@/lib/types';
 import { formatDate, formatMoney, toLabel } from '@/lib/format';
+import * as XLSX from 'xlsx';
 
 type RelationOptionsMap = Record<string, ModuleOption[]>;
 type RowData = Record<string, any>;
@@ -186,8 +187,19 @@ function getDisplayValue(
   return toLabel(String(value));
 }
 
-function convertRowsToCsv(rows: RowData[], columns: string[]) {
-  const header = columns.join(';');
+function convertRowsToCsv(
+  rows: RowData[],
+  columns: string[],
+  fields: CrudModuleConfig['fields'],
+) {
+  const getColumnLabel = (column: string) => {
+    const field = fields.find((item) => item.key === column);
+    return field?.label ?? column;
+  };
+
+  const header = columns
+    .map((column) => `"${getColumnLabel(column).replace(/"/g, '""')}"`)
+    .join(';');
 
   const body = rows.map((row) =>
     columns
@@ -469,32 +481,105 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
     setShowForm(false);
   }
 
-  function buildPayload(): PayloadData {
-    const payload: PayloadData = {};
+ function buildPayload(): PayloadData {
+  const payload: PayloadData = {};
 
-    config.fields.forEach((field) => {
-      if (isFileField(field) && !form[field.key]) {
-        payload[field.key] = null;
-        return;
-      }
-
-      payload[field.key] = castValue(field, form[field.key]);
-    });
-
-    Object.keys(payload).forEach((key) => {
-      if (Array.isArray(payload[key])) {
-        payload[key] = payload[key].filter(Boolean);
-      }
-    });
-
-    if (config.table === 'financial_entries') {
-      return applyFinancialRules(payload);
+  config.fields.forEach((field) => {
+    if (isFileField(field) && !form[field.key]) {
+      payload[field.key] = null;
+      return;
     }
 
-    return payload;
+    payload[field.key] = castValue(field, form[field.key]);
+  });
+
+  Object.keys(payload).forEach((key) => {
+    if (Array.isArray(payload[key])) {
+      payload[key] = payload[key].filter(Boolean);
+    }
+  });
+
+  if (config.table === 'financial_entries') {
+    return applyFinancialRules(payload);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  return payload;
+}
+
+async function createFinancialEntryFromRelatedModule(payload: PayloadData) {
+  if (config.slug !== 'vistorias' && config.slug !== 'multas') return;
+
+  let financialPayload: PayloadData | null = null;
+  let investorId: string | null = null;
+
+  if (payload.vehicle_id) {
+    const { data: investorData, error: investorError } = await supabase
+      .from('investors')
+      .select('id')
+      .contains('active_cars', [String(payload.vehicle_id)])
+      .limit(1)
+      .maybeSingle();
+
+    if (!investorError && investorData?.id) {
+      investorId = String(investorData.id);
+    }
+  }
+
+  if (config.slug === 'vistorias') {
+    const valorGasto = Number(payload.valor_gasto ?? 0);
+
+    if (!valorGasto || valorGasto <= 0) return;
+
+    financialPayload = {
+      date: payload.date,
+      vehicle_id: payload.vehicle_id,
+      driver_id: payload.driver_id,
+      investor_id: investorId,
+      expense_type: 'manutencao',
+      expense_value: valorGasto,
+      rent_value: null,
+      adm_fee: null,
+      repasse_value: null,
+      description: payload.observations
+        ? `Vistoria - ${payload.observations}`
+        : 'Vistoria',
+      type: 'expense',
+      amount: valorGasto,
+    };
+  }
+
+  if (config.slug === 'multas') {
+    const valorMulta = Number(payload.amount ?? 0);
+
+    if (!valorMulta || valorMulta <= 0) return;
+
+    financialPayload = {
+      date: payload.due_date ?? payload.date,
+      vehicle_id: payload.vehicle_id,
+      driver_id: payload.driver_id,
+      investor_id: investorId,
+      expense_type: 'multa',
+      expense_value: valorMulta,
+      rent_value: null,
+      adm_fee: null,
+      repasse_value: null,
+      description: payload.description
+        ? `Multa - ${payload.description}`
+        : 'Multa',
+      type: 'expense',
+      amount: valorMulta,
+    };
+  }
+
+  if (!financialPayload) return;
+
+  const { error } = await supabase
+    .from('financial_entries')
+    .insert(financialPayload);
+
+  if (error) throw new Error(error.message);
+}
+async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setSaving(true);
@@ -570,9 +655,11 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
 
         if (error) throw new Error(error.message);
 
-        savedId = data?.id ? String(data.id) : null;
+       savedId = data?.id ? String(data.id) : null;
 
-        setSuccess('Registro salvo com sucesso.');
+await createFinancialEntryFromRelatedModule(payload);
+
+setSuccess('Registro salvo com sucesso.');
       }
 
       if (config.slug === 'motoristas' && savedId) {
@@ -736,16 +823,29 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
   }
 
   function exportRows() {
-    const csv = convertRowsToCsv(rows, config.listColumns);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const headers = config.listColumns.map((column) => getColumnLabel(config, column));
 
-    link.href = url;
-    link.download = `${config.slug}-export.csv`;
-    link.click();
+    const data = rows.map((row) =>
+      config.listColumns.map((column) =>
+        getDisplayValue(config, relationOptions, column, row[column]),
+      ),
+    );
 
-    URL.revokeObjectURL(url);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...data]);
+
+    worksheet['!cols'] = config.listColumns.map((column) => {
+      const headerLength = getColumnLabel(config, column).length;
+      const maxContentLength = rows.reduce((max, row) => {
+        const value = getDisplayValue(config, relationOptions, column, row[column]);
+        return Math.max(max, String(value).length);
+      }, headerLength);
+
+      return { wch: Math.min(Math.max(maxContentLength + 4, 14), 45) };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, config.title.slice(0, 31));
+    XLSX.writeFile(workbook, `${config.slug}-export.xlsx`);
   }
 
   async function importRows(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1273,7 +1373,7 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
               onClick={exportRows}
               disabled={rows.length === 0 || loading || saving}
             >
-              Exportar Excel/CSV
+              Exportar Excel
             </button>
 
             <label
