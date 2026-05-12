@@ -17,25 +17,39 @@ function isActiveContract(contract: any) {
   );
 }
 
-function getPaymentValue(row: any) {
+function getMovementValue(row: any) {
   return (
-    toNumber(row.amount_paid) ||
-    toNumber(row.paid_value) ||
     toNumber(row.valor_pago) ||
-    toNumber(row.total_charged) ||
-    toNumber(row.rent_value) ||
+    toNumber(row.valor_aluguel) ||
+    toNumber(row.valor_seguro) ||
+    toNumber(row.valor_rastreador) ||
     0
   );
 }
 
-function getRecoveryExpense(row: any) {
+function getMovementExpense(row: any) {
   return (
-    toNumber(row.tow_total_value) ||
-    toNumber(row.guicho_total_value) ||
-    toNumber(row.total_tow_value) ||
-    toNumber(row.recovery_total_value) ||
+    toNumber(row.valor_multa_atraso) ||
+    toNumber(row.valor_total_guincho) ||
+    toNumber(row.valor_motorista_guincho) ||
+    toNumber(row.valor_adm_guincho) ||
+    toNumber(row.valor_socio_guincho) ||
     0
   );
+}
+
+function isEntrada(row: any) {
+  const origem = String(row.origem ?? '').toLowerCase();
+  const tipo = String(row.tipo_movimento ?? '').toLowerCase();
+
+  return origem === 'pagamento' || tipo === 'aluguel';
+}
+
+function isDespesa(row: any) {
+  const origem = String(row.origem ?? '').toLowerCase();
+  const tipo = String(row.tipo_movimento ?? '').toLowerCase();
+
+  return origem === 'multa' || origem === 'vistoria' || tipo === 'multa' || tipo === 'vistoria';
 }
 
 export async function FinancialDashboard() {
@@ -45,47 +59,34 @@ export async function FinancialDashboard() {
 
   const [
     contractsRes,
-    financialRes,
-    paymentRecordsRes,
+    financialMovementsRes,
     vehiclesRes,
     investorsRes,
   ] = await Promise.all([
     supabase.from('contracts').select('*'),
-    supabase.from('financial_entries').select('*'),
-    supabase.from('payment_records').select('*'),
+    supabase.from('vw_financial_movements').select('*').order('created_at', { ascending: false }),
     supabase.from('vehicles').select('id, plate, model, brand'),
     supabase.from('investors').select('id, name'),
   ]);
 
   const contracts = (contractsRes.data ?? []).filter(isActiveContract);
-  const financialRows = financialRes.data ?? [];
-  const paymentRows = paymentRecordsRes.data ?? [];
+  const financialMovements = financialMovementsRes.data ?? [];
   const vehicles = vehiclesRes.data ?? [];
   const investors = investorsRes.data ?? [];
 
+  if (financialMovementsRes.error) {
+    console.error('Erro ao buscar vw_financial_movements:', financialMovementsRes.error);
+  }
+
   // ── Totais gerais ──
-  const entradasFinanceiro = financialRows.reduce(
-    (s: number, r: any) => s + toNumber(r.rent_value),
-    0
-  );
+  const totalEntradas = financialMovements
+    .filter(isEntrada)
+    .reduce((s: number, r: any) => s + getMovementValue(r), 0);
 
-  const entradasPagamentos = paymentRows.reduce(
-    (s: number, r: any) => s + getPaymentValue(r),
-    0
-  );
+  const totalDespesas = financialMovements
+    .filter(isDespesa)
+    .reduce((s: number, r: any) => s + getMovementExpense(r), 0);
 
-  const despesasFinanceiro = financialRows.reduce(
-    (s: number, r: any) => s + toNumber(r.expense_value),
-    0
-  );
-
-  const despesasRecuperacao = paymentRows.reduce(
-    (s: number, r: any) => s + getRecoveryExpense(r),
-    0
-  );
-
-  const totalEntradas = entradasFinanceiro + entradasPagamentos;
-  const totalDespesas = despesasFinanceiro + despesasRecuperacao;
   const resultado = totalEntradas - totalDespesas;
 
   const repasseSocioTotal = contracts.reduce((s: number, c: any) => {
@@ -115,11 +116,7 @@ export async function FinancialDashboard() {
         (c: any) => String(c.vehicle_id) === String(v.id)
       );
 
-      const vFinancial = financialRows.filter(
-        (r: any) => String(r.vehicle_id) === String(v.id)
-      );
-
-      const vPayments = paymentRows.filter(
+      const vMovements = financialMovements.filter(
         (r: any) => String(r.vehicle_id) === String(v.id)
       );
 
@@ -128,22 +125,13 @@ export async function FinancialDashboard() {
         0
       );
 
-      const aluguelRecebido = vPayments.reduce(
-        (s: number, r: any) => s + getPaymentValue(r),
-        0
-      );
+      const aluguelRecebido = vMovements
+        .filter(isEntrada)
+        .reduce((s: number, r: any) => s + getMovementValue(r), 0);
 
-      const despesasFinanceiroVeiculo = vFinancial.reduce(
-        (s: number, r: any) => s + toNumber(r.expense_value),
-        0
-      );
-
-      const despesasRecuperacaoVeiculo = vPayments.reduce(
-        (s: number, r: any) => s + getRecoveryExpense(r),
-        0
-      );
-
-      const despesas = despesasFinanceiroVeiculo + despesasRecuperacaoVeiculo;
+      const despesas = vMovements
+        .filter(isDespesa)
+        .reduce((s: number, r: any) => s + getMovementExpense(r), 0);
 
       const repasseSocio = vContracts.reduce((s: number, c: any) => {
         return s + toNumber(c.rent_value) * (toNumber(c.repasse_value) / 100);
