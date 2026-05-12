@@ -187,7 +187,6 @@ function getDisplayValue(
   return toLabel(String(value));
 }
 
-
 function parseCsv(text: string) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
@@ -232,28 +231,13 @@ function applyFinancialRules(payload: PayloadData) {
   return payload;
 }
 
-
 function getRequiredFieldMessage(config: CrudModuleConfig, form: FormState) {
-  const recoveryFields = [
-    'recovery_date',
-    'recovery_reason',
-    'recovery_status',
-    'tow_value',
-    'tow_driver_value',
-    'tow_admin_value',
-    'tow_investor_value',
-  ];
+  // Na página de Pagamentos e Recuperações, nenhum campo deve bloquear o salvamento.
+  // Aira pediu para poder salvar incompleto e editar depois, se precisar.
+  if (config.slug === 'pagamentos') return null;
 
   const requiredField = config.fields.find((field) => {
     if (!field.required) return false;
-
-    if (
-      config.slug === 'pagamentos' &&
-      !Boolean(form.vehicle_recovery_needed) &&
-      recoveryFields.includes(field.key)
-    ) {
-      return false;
-    }
 
     const value = form[field.key];
 
@@ -477,207 +461,210 @@ export function ModuleCrud({ config }: { config: CrudModuleConfig }) {
     setShowForm(false);
   }
 
- function buildPayload(): PayloadData {
-  const payload: PayloadData = {};
+  function buildPayload(): PayloadData {
+    const payload: PayloadData = {};
 
-  config.fields.forEach((field) => {
-    if (isFileField(field) && !form[field.key]) {
-      payload[field.key] = null;
-      return;
+    config.fields.forEach((field) => {
+      if (isFileField(field) && !form[field.key]) {
+        payload[field.key] = null;
+        return;
+      }
+
+      payload[field.key] = castValue(field, form[field.key]);
+    });
+
+    Object.keys(payload).forEach((key) => {
+      if (Array.isArray(payload[key])) {
+        payload[key] = payload[key].filter(Boolean);
+      }
+    });
+
+    if (config.slug === 'pagamentos') {
+      const precisouRecuperar = Boolean(payload.vehicle_recovery_needed);
+
+      if (!precisouRecuperar) {
+        payload.recovery_date = null;
+        payload.recovery_reason = null;
+
+        // Quando não houve recuperação, o status correto é "Não acionada".
+        // Isso evita erro de check constraint no banco.
+        payload.recovery_status = 'nao_acionada';
+
+        payload.tow_value = 0;
+        payload.tow_driver_value = 0;
+        payload.tow_admin_value = 0;
+        payload.tow_investor_value = 0;
+      }
     }
 
-    payload[field.key] = castValue(field, form[field.key]);
-  });
-
-  Object.keys(payload).forEach((key) => {
-  if (Array.isArray(payload[key])) {
-    payload[key] = payload[key].filter(Boolean);
-  }
-});
-
-if (config.slug === 'pagamentos') {
-  const precisouRecuperar = Boolean(payload.vehicle_recovery_needed);
-
-  if (!precisouRecuperar) {
-    payload.recovery_date = null;
-    payload.recovery_reason = null;
-
-    // Quando não houve recuperação, o status correto é "Não acionada".
-    // Isso evita erro de check constraint no banco.
-    payload.recovery_status = 'nao_acionada';
-
-    payload.tow_value = 0;
-    payload.tow_driver_value = 0;
-    payload.tow_admin_value = 0;
-    payload.tow_investor_value = 0;
-  }
-}
-
-if (config.table === 'financial_entries') {
-  return applyFinancialRules(payload);
-}
-
-  return payload;
-}
-
-async function createFinancialEntryFromRelatedModule(payload: PayloadData) {
-  if (
-  config.slug !== 'vistorias' &&
-  config.slug !== 'multas' &&
-  config.slug !== 'pagamentos'
-) return;
-
-  let financialPayload: PayloadData | null = null;
-  let investorId: string | null = null;
-
-  if (payload.vehicle_id) {
-    const { data: investorData, error: investorError } = await supabase
-      .from('investors')
-      .select('id')
-      .contains('active_cars', [String(payload.vehicle_id)])
-      .limit(1)
-      .maybeSingle();
-
-    if (!investorError && investorData?.id) {
-      investorId = String(investorData.id);
+    if (config.table === 'financial_entries') {
+      return applyFinancialRules(payload);
     }
+
+    return payload;
   }
 
-  if (config.slug === 'vistorias') {
-    const valorGasto = Number(payload.valor_gasto ?? 0);
+  async function createFinancialEntryFromRelatedModule(payload: PayloadData) {
+    if (
+      config.slug !== 'vistorias' &&
+      config.slug !== 'multas' &&
+      config.slug !== 'pagamentos'
+    ) return;
 
-    if (!valorGasto || valorGasto <= 0) return;
+    let financialPayload: PayloadData | null = null;
+    let investorId: string | null = null;
 
-    financialPayload = {
-      date: payload.date,
-      vehicle_id: payload.vehicle_id,
-      driver_id: payload.driver_id,
-      investor_id: investorId,
-      expense_type: 'manutencao',
-      expense_value: valorGasto,
-      rent_value: null,
-      adm_fee: null,
-      repasse_value: null,
-      description: payload.observations
-        ? `Vistoria - ${payload.observations}`
-        : 'Vistoria',
-      type: 'expense',
-      amount: valorGasto,
-    };
-  }
+    if (payload.vehicle_id) {
+      const { data: investorData, error: investorError } = await supabase
+        .from('investors')
+        .select('id')
+        .contains('active_cars', [String(payload.vehicle_id)])
+        .limit(1)
+        .maybeSingle();
 
-  if (config.slug === 'multas') {
-    const valorMulta = Number(payload.amount ?? 0);
+      if (!investorError && investorData?.id) {
+        investorId = String(investorData.id);
+      }
+    }
 
-    if (!valorMulta || valorMulta <= 0) return;
+    if (config.slug === 'vistorias') {
+      const valorGasto = Number(payload.valor_gasto ?? 0);
 
-    financialPayload = {
-      date: payload.due_date ?? payload.date,
-      vehicle_id: payload.vehicle_id,
-      driver_id: payload.driver_id,
-      investor_id: investorId,
-      expense_type: 'multa',
-      expense_value: valorMulta,
-      rent_value: null,
-      adm_fee: null,
-      repasse_value: null,
-      description: payload.description
-        ? `Multa - ${payload.description}`
-        : 'Multa',
-      type: 'expense',
-      amount: valorMulta,
-    };
-  }
-  if (config.slug === 'pagamentos') {
-    const valorPago = Number(payload.amount_paid ?? 0);
-    const multaAtraso = Number(payload.late_fee_value ?? 0);
-    const valorGuincho = Number(payload.tow_value ?? 0);
+      if (!valorGasto || valorGasto <= 0) return;
 
-    const dataLancamento =
-      payload.paid_date ?? payload.due_date ?? new Date().toISOString().slice(0, 10);
-
-    const financialEntries: PayloadData[] = [];
-
-    if (valorPago > 0) {
-      financialEntries.push({
-        date: dataLancamento,
+      financialPayload = {
+        date: payload.date,
         vehicle_id: payload.vehicle_id,
         driver_id: payload.driver_id,
-        investor_id: payload.investor_id ?? investorId,
-        expense_type: null,
-        expense_value: null,
-        rent_value: valorPago,
-        adm_fee: null,
-        repasse_value: null,
-        description: 'Pagamento recebido do motorista',
-        type: 'income',
-        amount: valorPago,
-      });
-    }
-
-    if (multaAtraso > 0) {
-      financialEntries.push({
-        date: dataLancamento,
-        vehicle_id: payload.vehicle_id,
-        driver_id: payload.driver_id,
-        investor_id: payload.investor_id ?? investorId,
-        expense_type: null,
-        expense_value: null,
-        rent_value: multaAtraso,
-        adm_fee: null,
-        repasse_value: null,
-        description: 'Multa por atraso recebida do motorista',
-        type: 'income',
-        amount: multaAtraso,
-      });
-    }
-
-    if (valorGuincho > 0) {
-      const parteMotorista = Number(payload.tow_driver_value ?? valorGuincho * 0.5);
-      const parteAdm = Number(
-        payload.tow_admin_value ??
-          (payload.investor_id || investorId ? valorGuincho * 0.25 : valorGuincho * 0.5),
-      );
-      const parteSocio = Number(
-        payload.tow_investor_value ??
-          (payload.investor_id || investorId ? valorGuincho * 0.25 : 0),
-      );
-
-      financialEntries.push({
-        date: dataLancamento,
-        vehicle_id: payload.vehicle_id,
-        driver_id: payload.driver_id,
-        investor_id: payload.investor_id ?? investorId,
-        expense_type: 'outros',
-        expense_value: valorGuincho,
+        investor_id: investorId,
+        expense_type: 'manutencao',
+        expense_value: valorGasto,
         rent_value: null,
         adm_fee: null,
         repasse_value: null,
-        description: `Guincho / recuperação de veículo. Motorista: ${parteMotorista}. ADM: ${parteAdm}. Sócio: ${parteSocio}.`,
+        description: payload.observations
+          ? `Vistoria - ${payload.observations}`
+          : 'Vistoria',
         type: 'expense',
-        amount: valorGuincho,
-      });
+        amount: valorGasto,
+      };
     }
 
-    if (financialEntries.length === 0) return;
+    if (config.slug === 'multas') {
+      const valorMulta = Number(payload.amount ?? 0);
+
+      if (!valorMulta || valorMulta <= 0) return;
+
+      financialPayload = {
+        date: payload.due_date ?? payload.date,
+        vehicle_id: payload.vehicle_id,
+        driver_id: payload.driver_id,
+        investor_id: investorId,
+        expense_type: 'multa',
+        expense_value: valorMulta,
+        rent_value: null,
+        adm_fee: null,
+        repasse_value: null,
+        description: payload.description
+          ? `Multa - ${payload.description}`
+          : 'Multa',
+        type: 'expense',
+        amount: valorMulta,
+      };
+    }
+
+    if (config.slug === 'pagamentos') {
+      const valorPago = Number(payload.amount_paid ?? 0);
+      const multaAtraso = Number(payload.late_fee_value ?? 0);
+      const valorGuincho = Number(payload.tow_value ?? 0);
+
+      const dataLancamento =
+        payload.paid_date ?? payload.due_date ?? new Date().toISOString().slice(0, 10);
+
+      const financialEntries: PayloadData[] = [];
+
+      if (valorPago > 0) {
+        financialEntries.push({
+          date: dataLancamento,
+          vehicle_id: payload.vehicle_id,
+          driver_id: payload.driver_id,
+          investor_id: payload.investor_id ?? investorId,
+          expense_type: null,
+          expense_value: null,
+          rent_value: valorPago,
+          adm_fee: null,
+          repasse_value: null,
+          description: 'Pagamento recebido do motorista',
+          type: 'income',
+          amount: valorPago,
+        });
+      }
+
+      if (multaAtraso > 0) {
+        financialEntries.push({
+          date: dataLancamento,
+          vehicle_id: payload.vehicle_id,
+          driver_id: payload.driver_id,
+          investor_id: payload.investor_id ?? investorId,
+          expense_type: null,
+          expense_value: null,
+          rent_value: multaAtraso,
+          adm_fee: null,
+          repasse_value: null,
+          description: 'Multa por atraso recebida do motorista',
+          type: 'income',
+          amount: multaAtraso,
+        });
+      }
+
+      if (valorGuincho > 0) {
+        const parteMotorista = Number(payload.tow_driver_value ?? valorGuincho * 0.5);
+        const parteAdm = Number(
+          payload.tow_admin_value ??
+            (payload.investor_id || investorId ? valorGuincho * 0.25 : valorGuincho * 0.5),
+        );
+        const parteSocio = Number(
+          payload.tow_investor_value ??
+            (payload.investor_id || investorId ? valorGuincho * 0.25 : 0),
+        );
+
+        financialEntries.push({
+          date: dataLancamento,
+          vehicle_id: payload.vehicle_id,
+          driver_id: payload.driver_id,
+          investor_id: payload.investor_id ?? investorId,
+          expense_type: 'outros',
+          expense_value: valorGuincho,
+          rent_value: null,
+          adm_fee: null,
+          repasse_value: null,
+          description: `Guincho / recuperação de veículo. Motorista: ${parteMotorista}. ADM: ${parteAdm}. Sócio: ${parteSocio}.`,
+          type: 'expense',
+          amount: valorGuincho,
+        });
+      }
+
+      if (financialEntries.length === 0) return;
+
+      const { error } = await supabase
+        .from('financial_entries')
+        .insert(financialEntries);
+
+      if (error) throw new Error(error.message);
+
+      return;
+    }
+
+    if (!financialPayload) return;
 
     const { error } = await supabase
       .from('financial_entries')
-      .insert(financialEntries);
+      .insert(financialPayload);
 
     if (error) throw new Error(error.message);
-
-    return;
   }
-  if (!financialPayload) return;
 
-  const { error } = await supabase
-    .from('financial_entries')
-    .insert(financialPayload);
-
-  if (error) throw new Error(error.message);
-}
-async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setSaving(true);
@@ -753,11 +740,11 @@ async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 
         if (error) throw new Error(error.message);
 
-       savedId = data?.id ? String(data.id) : null;
+        savedId = data?.id ? String(data.id) : null;
 
-await createFinancialEntryFromRelatedModule(payload);
+        await createFinancialEntryFromRelatedModule(payload);
 
-setSuccess('Registro salvo com sucesso.');
+        setSuccess('Registro salvo com sucesso.');
       }
 
       if (config.slug === 'motoristas' && savedId) {
@@ -792,7 +779,7 @@ setSuccess('Registro salvo com sucesso.');
       }
 
       if (message.includes('violates check constraint')) {
-        message = 'Erro: valor inválido em um dos campos.';
+        message = `Erro real do banco: ${message}`;
       }
 
       setError(message);
@@ -968,6 +955,20 @@ setSuccess('Registro salvo com sucesso.');
 
           payload[field.key] = castValue(field, row[field.key]);
         });
+
+        if (config.slug === 'pagamentos') {
+          const precisouRecuperar = Boolean(payload.vehicle_recovery_needed);
+
+          if (!precisouRecuperar) {
+            payload.recovery_date = null;
+            payload.recovery_reason = null;
+            payload.recovery_status = 'nao_acionada';
+            payload.tow_value = 0;
+            payload.tow_driver_value = 0;
+            payload.tow_admin_value = 0;
+            payload.tow_investor_value = 0;
+          }
+        }
 
         if (config.table === 'financial_entries') {
           return applyFinancialRules(payload);
@@ -1178,218 +1179,286 @@ setSuccess('Registro salvo com sucesso.');
               alignItems: 'end',
             }}
           >
-            {config.fields.map((field) => (
-              <div
-                className={`field ${field.type === 'textarea' ? 'full' : ''}`}
-                key={field.key}
-                style={{
-                  minWidth: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}
-              >
-                <label htmlFor={field.key}>
-                  {field.label}
-                  {field.required ? ' *' : ''}
-                </label>
+            {config.fields.map((field) => {
+              const fieldIsRequired = config.slug === 'pagamentos' ? false : Boolean(field.required);
+              const isVehicleRecoveryField =
+                config.slug === 'pagamentos' && field.key === 'vehicle_recovery_needed';
 
-                {field.type === 'textarea' ? (
-                  <textarea
-                    id={field.key}
-                    name={field.key}
-                    value={String(form[field.key] ?? '')}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    required={field.required}
-                    placeholder={field.placeholder}
-                  />
-                ) : field.type === 'select' ? (
-                  <select
-                    id={field.key}
-                    name={field.key}
-                    value={String(form[field.key] ?? '')}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    required={field.required}
-                  >
-                    <option value="">Selecione</option>
+              return (
+                <div
+                  className={`field ${field.type === 'textarea' ? 'full' : ''}`}
+                  key={field.key}
+                  style={{
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <label htmlFor={field.key}>
+                    {field.label}
+                    {fieldIsRequired ? ' *' : ''}
+                  </label>
 
-                    {(field.relation
-                      ? relationOptions[field.key] ?? []
-                      : field.options ?? []
-                    ).map((option) => (
-                      <option key={String(option.value)} value={String(option.value)}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === 'multiselect' ? (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gap: 8,
-                      maxHeight: 160,
-                      overflowY: 'auto',
-                      border: '1px solid #30363d',
-                      borderRadius: 10,
-                      padding: 10,
-                      background: '#1c2128',
-                    }}
-                  >
-                    {(field.relation
-                      ? relationOptions[field.key] ?? []
-                      : field.options ?? []
-                    ).map((option) => {
-                      const selectedValues = Array.isArray(form[field.key])
-                        ? form[field.key]
-                        : [];
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      id={field.key}
+                      name={field.key}
+                      value={String(form[field.key] ?? '')}
+                      onChange={(e) => updateField(field, e.target.value)}
+                      required={fieldIsRequired}
+                      placeholder={field.placeholder}
+                    />
+                  ) : field.type === 'select' ? (
+                    <select
+                      id={field.key}
+                      name={field.key}
+                      value={String(form[field.key] ?? '')}
+                      onChange={(e) => updateField(field, e.target.value)}
+                      required={fieldIsRequired}
+                    >
+                      <option value="">Selecione</option>
 
-                      const checked = selectedValues.includes(String(option.value));
+                      {(field.relation
+                        ? relationOptions[field.key] ?? []
+                        : field.options ?? []
+                      ).map((option) => (
+                        <option key={String(option.value)} value={String(option.value)}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === 'multiselect' ? (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 8,
+                        maxHeight: 160,
+                        overflowY: 'auto',
+                        border: '1px solid #30363d',
+                        borderRadius: 10,
+                        padding: 10,
+                        background: '#1c2128',
+                      }}
+                    >
+                      {(field.relation
+                        ? relationOptions[field.key] ?? []
+                        : field.options ?? []
+                      ).map((option) => {
+                        const selectedValues = Array.isArray(form[field.key])
+                          ? form[field.key]
+                          : [];
 
-                      return (
+                        const checked = selectedValues.includes(String(option.value));
+
+                        return (
+                          <label
+                            key={String(option.value)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const currentValues = Array.isArray(form[field.key])
+                                  ? form[field.key]
+                                  : [];
+
+                                const newValues = e.target.checked
+                                  ? [...currentValues, String(option.value)]
+                                  : currentValues.filter(
+                                      (value: string) => value !== String(option.value),
+                                    );
+
+                                updateField(field, newValues);
+                              }}
+                            />
+
+                            <span>{option.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : field.type === 'checkbox' ? (
+                    isVehicleRecoveryField ? (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: 10,
+                        }}
+                      >
                         <label
-                          key={String(option.value)}
                           style={{
+                            minHeight: 52,
+                            border: '1px solid #30363d',
+                            borderRadius: 10,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
+                            justifyContent: 'center',
+                            gap: 10,
                             cursor: 'pointer',
+                            fontSize: 16,
+                            background: Boolean(form[field.key]) ? '#f0a732' : '#1c2128',
+                            color: Boolean(form[field.key]) ? '#0d1117' : 'inherit',
+                            fontWeight: 700,
                           }}
                         >
                           <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              const currentValues = Array.isArray(form[field.key])
-                                ? form[field.key]
-                                : [];
-
-                              const newValues = e.target.checked
-                                ? [...currentValues, String(option.value)]
-                                : currentValues.filter(
-                                    (value: string) => value !== String(option.value),
-                                  );
-
-                              updateField(field, newValues);
-                            }}
+                            name={field.key}
+                            type="radio"
+                            checked={Boolean(form[field.key]) === true}
+                            onChange={() => updateField(field, true)}
+                            style={{ width: 18, height: 18, cursor: 'pointer' }}
                           />
-
-                          <span>{option.label}</span>
+                          Sim
                         </label>
-                      );
-                    })}
-                  </div>
-                ) : field.type === 'checkbox' ? (
-                  <label
-                    htmlFor={field.key}
-                    style={{
-                      minHeight: 52,
-                      width: '100%',
-                      border: '1px solid #30363d',
-                      borderRadius: 10,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 10,
-                      cursor: 'pointer',
-                      fontSize: 16,
-                      background: '#1c2128',
-                    }}
-                  >
-                    <input
-                      id={field.key}
-                      name={field.key}
-                      type="checkbox"
-                      checked={Boolean(form[field.key])}
-                      onChange={(e) => updateField(field, e.target.checked)}
-                      style={{ width: 22, height: 22, cursor: 'pointer' }}
-                    />
-                    {field.label}
-                  </label>
-                ) : isFileField(field) ? (
-                  <>
-                    <input
-                      id={field.key}
-                      name={field.key}
-                      type="file"
-                      accept={
-                        config.slug === 'financeiro' && field.key === 'nf_photo'
-                          ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
-                          : field.key === 'cnh_file_url'
-                            ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
-                            : field.key.includes('pdf') || field.key.includes('contract')
-                              ? 'application/pdf'
-                              : 'image/jpeg,image/jpg,image/png,image/webp'
-                      }
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        void uploadFile(field, file);
-                      }}
-                    />
 
-                    {form[field.key] ? (
-                      <small style={{ color: 'var(--muted)' }}>
-                        Arquivo enviado: {String(form[field.key])}
-                      </small>
-                    ) : null}
-                  </>
-                ) : field.key === 'address' ? (
-                  <div style={{ display: 'flex', gap: 8 }}>
+                        <label
+                          style={{
+                            minHeight: 52,
+                            border: '1px solid #30363d',
+                            borderRadius: 10,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 10,
+                            cursor: 'pointer',
+                            fontSize: 16,
+                            background: !Boolean(form[field.key]) ? '#f0a732' : '#1c2128',
+                            color: !Boolean(form[field.key]) ? '#0d1117' : 'inherit',
+                            fontWeight: 700,
+                          }}
+                        >
+                          <input
+                            name={field.key}
+                            type="radio"
+                            checked={Boolean(form[field.key]) === false}
+                            onChange={() => updateField(field, false)}
+                            style={{ width: 18, height: 18, cursor: 'pointer' }}
+                          />
+                          Não
+                        </label>
+                      </div>
+                    ) : (
+                      <label
+                        htmlFor={field.key}
+                        style={{
+                          minHeight: 52,
+                          width: '100%',
+                          border: '1px solid #30363d',
+                          borderRadius: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 10,
+                          cursor: 'pointer',
+                          fontSize: 16,
+                          background: '#1c2128',
+                        }}
+                      >
+                        <input
+                          id={field.key}
+                          name={field.key}
+                          type="checkbox"
+                          checked={Boolean(form[field.key])}
+                          onChange={(e) => updateField(field, e.target.checked)}
+                          style={{ width: 22, height: 22, cursor: 'pointer' }}
+                        />
+                        {field.label}
+                      </label>
+                    )
+                  ) : isFileField(field) ? (
+                    <>
+                      <input
+                        id={field.key}
+                        name={field.key}
+                        type="file"
+                        accept={
+                          config.slug === 'financeiro' && field.key === 'nf_photo'
+                            ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+                            : field.key === 'cnh_file_url'
+                              ? 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+                              : field.key.includes('pdf') || field.key.includes('contract')
+                                ? 'application/pdf'
+                                : 'image/jpeg,image/jpg,image/png,image/webp'
+                        }
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          void uploadFile(field, file);
+                        }}
+                      />
+
+                      {form[field.key] ? (
+                        <small style={{ color: 'var(--muted)' }}>
+                          Arquivo enviado: {String(form[field.key])}
+                        </small>
+                      ) : null}
+                    </>
+                  ) : field.key === 'address' ? (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        id={field.key}
+                        name={field.key}
+                        type="text"
+                        value={form[field.key] ?? ''}
+                        onChange={(e) => updateField(field, e.target.value)}
+                        required={fieldIsRequired}
+                        placeholder={field.placeholder}
+                        readOnly={field.readonly}
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => void convertAddressToCoordinates()}
+                        disabled={saving}
+                        style={{
+                          background: '#f0a732',
+                          border: 'none',
+                          color: '#0d1117',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          borderRadius: 8,
+                          padding: '6px 12px',
+                          fontSize: 13,
+                        }}
+                      >
+                        Converter
+                      </button>
+                    </div>
+                  ) : (
                     <input
                       id={field.key}
                       name={field.key}
-                      type="text"
+                      type={String(field.type)}
                       value={form[field.key] ?? ''}
                       onChange={(e) => updateField(field, e.target.value)}
-                      required={field.required}
+                      required={fieldIsRequired}
                       placeholder={field.placeholder}
                       readOnly={field.readonly}
-                      style={{ flex: 1, minWidth: 0 }}
                     />
+                  )}
+                </div>
+              );
+            })}
 
-                    <button
-                      type="button"
-                      onClick={() => void convertAddressToCoordinates()}
-                      disabled={saving}
-                      style={{
-                        background: '#f0a732',
-                        border: 'none',
-                        color: '#0d1117',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        borderRadius: 8,
-                        padding: '6px 12px',
-                        fontSize: 13,
-                      }}
-                    >
-                      Converter
-                    </button>
-                  </div>
-                ) : (
-                  <input
-                    id={field.key}
-                    name={field.key}
-                    type={String(field.type)}
-                    value={form[field.key] ?? ''}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    required={field.required}
-                    placeholder={field.placeholder}
-                    readOnly={field.readonly}
-                  />
-                )}
-              </div>
-            ))}
-
-           <div
-  className="btn-row"
-  style={{
-    gridColumn: '1 / -1',
-    display: 'flex',
-    gap: 16,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  }}
->
+            <div
+              className="btn-row"
+              style={{
+                gridColumn: '1 / -1',
+                display: 'flex',
+                gap: 16,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
               <button className="btn primary" disabled={saving} type="submit">
                 {saving
                   ? 'Salvando...'
@@ -1414,14 +1483,12 @@ setSuccess('Registro salvo com sucesso.');
       <section className="card">
         <div className="page-header" style={{ marginBottom: 16 }}>
           <div>
-
-
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-		gap: 16,
+                gap: 16,
                 marginBottom: 20,
                 padding: '12px 16px',
                 borderRadius: 12,
@@ -1458,14 +1525,14 @@ setSuccess('Registro salvo com sucesso.');
           </div>
 
           <div
-  className="btn-row"
-  style={{
-    display: 'flex',
-    gap: 16,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  }}
->
+            className="btn-row"
+            style={{
+              display: 'flex',
+              gap: 16,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <button
               type="button"
               className="btn"
@@ -1596,37 +1663,37 @@ setSuccess('Registro salvo com sucesso.');
                         Editar
                       </button>
 
-                    {deletingId === String(row.id) ? (
-  <>
-    <button
-      className="btn primary"
-      onClick={confirmDelete}
-      disabled={saving}
-    >
-      {saving ? 'Processando...' : 'Confirmar'}
-    </button>
+                      {deletingId === String(row.id) ? (
+                        <>
+                          <button
+                            className="btn primary"
+                            onClick={confirmDelete}
+                            disabled={saving}
+                          >
+                            {saving ? 'Processando...' : 'Confirmar'}
+                          </button>
 
-    <button
-      className="btn"
-      onClick={() => setDeletingId(null)}
-      disabled={saving}
-    >
-      Cancelar
-    </button>
-  </>
-) : (
-  <button
-    className="btn danger"
-    onClick={() => {
-      setDeletingId(String(row.id));
-      setSuccess(null);
-      setError(null);
-    }}
-    disabled={saving}
-  >
-    Excluir
-  </button>
-)}
+                          <button
+                            className="btn"
+                            onClick={() => setDeletingId(null)}
+                            disabled={saving}
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn danger"
+                          onClick={() => {
+                            setDeletingId(String(row.id));
+                            setSuccess(null);
+                            setError(null);
+                          }}
+                          disabled={saving}
+                        >
+                          Excluir
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
